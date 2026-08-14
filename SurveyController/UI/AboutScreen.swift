@@ -3,7 +3,7 @@
 import SwiftUI
 
 struct AboutScreen: View {
-    @State private var model = AppModel()
+    let model: AppModel
 
     var body: some View {
         ScrollView {
@@ -35,7 +35,7 @@ struct AboutScreen: View {
                                        startPoint: .topLeading, endPoint: .bottomTrailing)
                     )
                     .frame(width: 72, height: 72)
-                    .shadow(color: .accentColor.opacity(0.35), radius: 8, y: 3)
+                    .shadow(color: .accentColor.opacity(0.25), radius: 5, y: 2)
                 Image(systemName: "doc.text.magnifyingglass")
                     .font(.system(size: 34, weight: .medium))
                     .foregroundStyle(.white)
@@ -79,7 +79,7 @@ struct AboutScreen: View {
         }
         .padding(20)
         .background(.background, in: RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.quinary))
     }
 
     @ViewBuilder
@@ -175,11 +175,11 @@ struct AboutScreen: View {
             }
             .padding(14)
             .background(.background, in: RoundedRectangle(cornerRadius: 10))
-            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.quinary))
         }
     }
 }
 
 #Preview {
-    AboutScreen()
+    AboutScreen(model: AppModel())
 }

@@ -342,11 +342,8 @@ struct LinkRow<Icon: View>: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(.background)
-                .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
-        )
+        .background(RoundedRectangle(cornerRadius: 10).fill(.background))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.quinary))
     }
 }
 

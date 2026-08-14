@@ -163,7 +163,7 @@ struct CommunityCard<Icon: View, Content: View>: View {
         .padding(20)
         .frame(maxWidth: .infinity, minHeight: 200, alignment: .topLeading)
         .background(.background, in: RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.quinary))
     }
 }
 

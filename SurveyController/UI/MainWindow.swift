@@ -47,7 +47,7 @@ struct MainWindow: View {
             case .settings: SettingsScreen(model: model)
             case .community: CommunityScreen()
             case .logs: LogsScreen(model: model)
-            case .about: AboutScreen()
+            case .about: AboutScreen(model: model)
             case nil: WizardView(model: model)
             }
         }

@@ -15,6 +15,6 @@ struct CardView<Content: View>: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background, in: RoundedRectangle(cornerRadius: 10))
-        .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.quinary))
     }
 }

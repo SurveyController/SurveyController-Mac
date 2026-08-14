@@ -21,7 +21,7 @@ struct WizardView: View {
             }
             .padding(.vertical, 18)
             .padding(.horizontal, 24)
-            .background(.bar)
+            .background(Color(nsColor: .windowBackgroundColor))
 
             Divider()
 

@@ -42,7 +42,6 @@ struct LogsScreen: View {
                                     .frame(width: 6, height: 6)
                                 Text(line)
                                     .font(.system(.caption, design: .monospaced))
-                                    .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .padding(.horizontal, 16)
