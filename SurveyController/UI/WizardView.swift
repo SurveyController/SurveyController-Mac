@@ -326,19 +326,22 @@ struct NetworkStepView: View {
                         Toggle("启用随机 UA", isOn: $model.runtimeConfig.randomUaEnabled)
                             .disabled(model.isRunning)
                         if model.runtimeConfig.randomUaEnabled {
-                            Grid(alignment: .leading, horizontalSpacing: 28, verticalSpacing: 8) {
-                                GridRow {
-                                    uaRatio("微信端", "wechat")
-                                    uaRatio("手机浏览器", "mobile")
-                                    uaRatio("电脑网页端", "pc")
+                            RatioSliders(
+                                labels: ["微信端", "手机浏览器", "电脑网页端"],
+                                values: RatioSliderMath.normalizeTo100([
+                                    model.runtimeConfig.randomUaRatios["wechat"] ?? 0,
+                                    model.runtimeConfig.randomUaRatios["mobile"] ?? 0,
+                                    model.runtimeConfig.randomUaRatios["pc"] ?? 0,
+                                ]),
+                                onChange: { values in
+                                    model.runtimeConfig.randomUaRatios["wechat"] = values.count > 0 ? values[0] : 0
+                                    model.runtimeConfig.randomUaRatios["mobile"] = values.count > 1 ? values[1] : 0
+                                    model.runtimeConfig.randomUaRatios["pc"] = values.count > 2 ? values[2] : 0
                                 }
-                            }
-                            let total = model.runtimeConfig.randomUaRatios.values.reduce(0, +)
-                            Text(total == 100
-                                 ? "比例合计 100%"
-                                 : "比例合计 \(total)%，运行时非 100% 将回落默认比例")
+                            )
+                            Text("微信 \(model.runtimeConfig.randomUaRatios["wechat"] ?? 0)% · 手机 \(model.runtimeConfig.randomUaRatios["mobile"] ?? 0)% · 电脑 \(model.runtimeConfig.randomUaRatios["pc"] ?? 0)%（总和恒 100%）")
                                 .font(.caption)
-                                .foregroundStyle(total == 100 ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -416,22 +419,6 @@ struct NetworkStepView: View {
         return AreaService.normalizeAreaCode(model.selectedCityCode ?? model.runtimeConfig.proxyAreaCode)
     }
 
-    private func uaRatio(_ title: String, _ key: String) -> some View {
-        HStack {
-            Text(title).frame(width: 90, alignment: .leading)
-            Slider(
-                value: Binding(
-                    get: { Double(model.runtimeConfig.randomUaRatios[key] ?? 0) },
-                    set: { model.runtimeConfig.randomUaRatios[key] = Int($0) }
-                ),
-                in: 0...100, step: 1
-            )
-            .disabled(model.isRunning)
-            Text("\(model.runtimeConfig.randomUaRatios[key] ?? 0)%")
-                .monospacedDigit()
-                .frame(width: 44, alignment: .trailing)
-        }
-    }
 }
 
 // MARK: - 第 5 步：检查

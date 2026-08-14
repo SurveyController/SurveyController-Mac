@@ -107,23 +107,19 @@ struct AnswerConfigEditor: View {
     private func weightEditor(_ question: SurveyQuestionMeta, kindLabel: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(kindLabel).font(.subheadline).foregroundStyle(.secondary)
-            ForEach(Array(optionList(question).enumerated()), id: \.offset) { index, option in
-                HStack(spacing: 12) {
-                    Text(option)
-                        .lineLimit(1)
-                        .frame(width: 220, alignment: .leading)
-                    Slider(value: weightBinding(question, index: index), in: 0...100, step: 1)
-                    Text("\(Int(currentWeight(question, index: index)))")
-                        .monospacedDigit()
-                        .frame(width: 36, alignment: .trailing)
-                        .foregroundStyle(.secondary)
-                    Text(normalizedPercent(question, index: index))
-                        .monospacedDigit()
-                        .font(.caption)
-                        .frame(width: 48, alignment: .trailing)
-                        .foregroundStyle(Color.accentColor)
+            RatioSliders(
+                labels: optionList(question),
+                values: RatioSliderMath.normalizeTo100(optionWeights(question)),
+                locked: lockedIndices[question.num] ?? [],
+                onToggleLock: { index in
+                    var locked = lockedIndices[question.num] ?? []
+                    if locked.contains(index) { locked.remove(index) } else { locked.insert(index) }
+                    lockedIndices[question.num] = locked
+                },
+                onChange: { values in
+                    setOptionWeights(question, values)
                 }
-            }
+            )
             if question.forcedOptionIndex != nil {
                 Label("题目要求固定选择「\(question.forcedOptionText)」，权重不生效", systemImage: "pin")
                     .font(.caption)
@@ -139,17 +135,11 @@ struct AnswerConfigEditor: View {
             Text("各选项独立命中概率（%），同时受题目数量限制约束")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            ForEach(Array(optionList(question).enumerated()), id: \.offset) { index, option in
-                HStack(spacing: 12) {
-                    Text(option)
-                        .lineLimit(1)
-                        .frame(width: 220, alignment: .leading)
-                    Slider(value: probabilityBinding(question, index: index), in: 0...100, step: 1)
-                    Text("\(Int(currentProbability(question, index: index)))%")
-                        .monospacedDigit()
-                        .frame(width: 44, alignment: .trailing)
-                        .foregroundStyle(.secondary)
-                }
+            HitRateSliders(
+                labels: optionList(question),
+                values: optionWeights(question)
+            ) { values in
+                setOptionWeights(question, values)
             }
             if let minLimit = intOrNil(question.multiMinLimit), let maxLimit = intOrNil(question.multiMaxLimit) {
                 Text("题目限制：最少选 \(minLimit) 项，最多选 \(maxLimit) 项")
@@ -180,18 +170,13 @@ struct AnswerConfigEditor: View {
             .frame(width: 260)
 
             let row = min(matrixRow, max(0, question.rows - 1))
-            ForEach(Array(optionList(question).enumerated()), id: \.offset) { index, option in
-                HStack(spacing: 12) {
-                    Text(option)
-                        .lineLimit(1)
-                        .frame(width: 220, alignment: .leading)
-                    Slider(value: matrixWeightBinding(question, row: row, index: index), in: 0...100, step: 1)
-                    Text("\(Int(currentMatrixWeight(question, row: row, index: index)))")
-                        .monospacedDigit()
-                        .frame(width: 36, alignment: .trailing)
-                        .foregroundStyle(.secondary)
+            RatioSliders(
+                labels: optionList(question),
+                values: RatioSliderMath.normalizeTo100(matrixRowWeights(question, row: row)),
+                onChange: { values in
+                    setMatrixRowWeights(question, row: row, values: values)
                 }
-            }
+            )
         }
     }
 
@@ -273,15 +258,75 @@ struct AnswerConfigEditor: View {
         return (0..<max(1, question.options)).map { "选项 \($0 + 1)" }
     }
 
-    /// 实时归一化百分比（权重总和为 0 时显示 均匀）。
-    private func normalizedPercent(_ question: SurveyQuestionMeta, index: Int) -> String {
+    /// 每题的锁定选项（联动滑杆用）。
+    @State private var lockedIndices: [Int: Set<Int>] = [:]
+
+    /// 读取整组权重（补齐/截断到选项数；-1 视为均匀）。
+    private func optionWeights(_ question: SurveyQuestionMeta) -> [Int] {
         let count = optionList(question).count
-        guard count > 0 else { return "" }
-        var total = 0.0
-        for i in 0..<count { total += currentWeight(question, index: i) }
-        guard total > 0 else { return "\(Int(100.0 / Double(count)))%" }
-        let percent = currentWeight(question, index: index) / total * 100
-        return "\(Int(percent.rounded()))%"
+        guard count > 0 else { return [] }
+        guard let entryIndex = entryIndex(questionNum: question.num),
+              let list = model.runtimeConfig.questionEntries[entryIndex].probabilities as? [Any] else {
+            return RatioSliderMath.evenSplit(count)
+        }
+        let weights = list.map { number($0) ?? 0 }
+        if weights.count == 1 && weights[0] == -1 {
+            return RatioSliderMath.evenSplit(count)
+        }
+        var ints = weights.map { Int(max(0, min(100, $0))) }
+        if ints.count < count {
+            ints.append(contentsOf: [Int](repeating: 0, count: count - ints.count))
+        } else if ints.count > count {
+            ints = Array(ints.prefix(count))
+        }
+        return ints
+    }
+
+    /// 写回整组权重（0-100 整数）。
+    private func setOptionWeights(_ question: SurveyQuestionMeta, _ values: [Int]) {
+        guard let entryIndex = entryIndex(questionNum: question.num) else { return }
+        model.runtimeConfig.questionEntries[entryIndex].probabilities = values
+    }
+
+    /// 读取矩阵某行权重。
+    private func matrixRowWeights(_ question: SurveyQuestionMeta, row: Int) -> [Int] {
+        let count = optionList(question).count
+        guard count > 0 else { return [] }
+        guard let entryIndex = entryIndex(questionNum: question.num),
+              let nested = model.runtimeConfig.questionEntries[entryIndex].probabilities as? [Any],
+              row < nested.count,
+              let rowList = nested[row] as? [Any] else {
+            return RatioSliderMath.evenSplit(count)
+        }
+        let weights = rowList.map { number($0) ?? 0 }
+        if weights.count == 1 && weights[0] == -1 {
+            return RatioSliderMath.evenSplit(count)
+        }
+        var ints = weights.map { Int(max(0, min(100, $0))) }
+        if ints.count < count {
+            ints.append(contentsOf: [Int](repeating: 0, count: count - ints.count))
+        } else if ints.count > count {
+            ints = Array(ints.prefix(count))
+        }
+        return ints
+    }
+
+    /// 写回矩阵某行权重。
+    private func setMatrixRowWeights(_ question: SurveyQuestionMeta, row: Int, values: [Int]) {
+        guard let entryIndex = entryIndex(questionNum: question.num) else { return }
+        let count = optionList(question).count
+        var nested: [[Int]] = []
+        if let raw = model.runtimeConfig.questionEntries[entryIndex].probabilities as? [Any] {
+            nested = raw.map { ($0 as? [Any])?.compactMap { number($0).map(Int.init) } ?? [] }
+        }
+        while nested.count < question.rows {
+            nested.append([Int](repeating: 0, count: count))
+        }
+        while nested[row].count < count {
+            nested[row].append(0)
+        }
+        nested[row] = values
+        model.runtimeConfig.questionEntries[entryIndex].probabilities = nested
     }
 
     private func currentWeights(_ entry: QuestionEntry) -> [Double] {
