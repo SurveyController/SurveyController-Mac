@@ -109,6 +109,34 @@ xcodebuild -project SurveyController.xcodeproj -scheme SurveyController \
   -configuration Release -derivedDataPath build CONFIGURATION_BUILD_DIR=build clean build
 ```
 
+## v0.1 移植状态（2026-08-14）
+
+已 1:1 移植并经单元测试验证（83 个用例，含官方 golden-value 夹具）：
+
+- `providers/common.py` → `Provider/ProviderType.swift`（URL 识别/归一化）
+- `providers/contracts.py` → `Core/Model/SurveyQuestionMeta.swift`
+- `core/config/`（schema + codec v6）→ `Core/Model/RuntimeConfig.swift` + `Data/ConfigCodec.swift`（与桌面版配置文件互通）
+- `core/questions/`（概率/文本/一致性查询）+ `providers/http_logic.py` → `Core/Questions/`
+- `wjx/provider/`（html_parser* + http_runtime 纯函数 + regexes + multiple_limits）→ `Provider/Wjx/`
+- `wjx/provider/answering_builders.py` → `Provider/Wjx/WjxAnswerBuilder.swift`（简化点见下）
+- `core/task/task_context.py` + engine → `Core/Model/ExecutionConfig.swift` + `Core/Engine/RunEngine.swift`
+- `network/proxy/session/` + `session_policy.py` → `Core/Backend/BackendClient.swift` + `Core/Proxy/ProxyPool.swift`
+
+v0.1 有意简化（后续版本补齐，改动时注意保持对标）：
+
+| 简化项 | 对标源 | 当前行为 |
+|--------|--------|---------|
+| 信度系数（tendency/joint plan） | core/psychometrics/ | 未接入：维度题按配置概率加权 |
+| 分布收敛 / 严格比例 | questions/distribution.py、strict_ratio.py | 未接入：按静态概率抽样 |
+| 人设加权 | core/persona/ | 未接入 |
+| 反填（xlsx 回放） | core/reverse_fill/ | 未接入 |
+| AI 填空（免费/自定义服务商） | core/ai/ + integrations/ai/ | 未接入：`__AI_FILL__` 回落默认文本 |
+| 身份证生成器区划码 | questions/utils.py | 8 个常用区划码子集（校验位算法 1:1） |
+| 下拉附加选项细化 | html_parser_choice.py | 基础版已移植，边角场景待补 |
+| 题目配置向导 UI | ui/question_editor/ | v0.1 使用默认均匀分布 + 手改配置 JSON |
+| 二维码识别 | io/qr/ | 未接入（v0.2 计划） |
+| 腾讯问卷 / 见数链路 | tencent/、credamo/ | 未移植（v0.2+） |
+
 ## 踩坑记录
 
 ### 1. ICU regex 的 `{`/`}` 转义（安卓端血泪教训，同样适用 macOS）
