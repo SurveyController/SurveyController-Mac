@@ -1,0 +1,30 @@
+{
+  "object" : {
+    "artifacts" : [
+
+    ],
+    "dependencies" : [
+      {
+        "basedOn" : null,
+        "packageRef" : {
+          "identity" : "swiftsoup",
+          "kind" : "remoteSourceControl",
+          "location" : "https://github.com/scinfu/SwiftSoup.git",
+          "name" : "SwiftSoup"
+        },
+        "state" : {
+          "checkoutState" : {
+            "revision" : "8d6ad267714cac3ae747cefdd21f7a6665006e1f",
+            "version" : "2.13.7"
+          },
+          "name" : "sourceControlCheckout"
+        },
+        "subpath" : "SwiftSoup"
+      }
+    ],
+    "prebuilts" : [
+
+    ]
+  },
+  "version" : 7
+}
