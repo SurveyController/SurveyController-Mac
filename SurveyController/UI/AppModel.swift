@@ -51,13 +51,17 @@ public final class AppModel {
     }
 
     public var wizardStep: WizardStep = .survey
+    /// 最近一次切换方向（+1 前进 / -1 后退），驱动过渡动画方向
+    public var wizardDirection: Int = 1
     /// 向导中已解锁到的最远步骤（可回退点击）
     public var maxReachedStep: WizardStep = .survey
     /// 答案编辑页当前选中的题目下标
     public var selectedQuestionIndex: Int = 0
 
     public func goToStep(_ step: WizardStep) {
+        let direction = step.rawValue >= wizardStep.rawValue ? 1 : -1
         wizardStep = step
+        wizardDirection = direction
         if step.rawValue > maxReachedStep.rawValue {
             maxReachedStep = step
         }
