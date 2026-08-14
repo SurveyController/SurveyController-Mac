@@ -11,7 +11,8 @@ private let validLogicParseStatuses: Set<String> = [logicParseStatusComplete, lo
 private let terminateKeywords = ["结束作答", "结束答题", "结束填写", "终止作答", "停止作答"]
 
 /// 题目元数据（平台无关契约）。
-public struct SurveyQuestionMeta: @unchecked Sendable {
+public struct SurveyQuestionMeta: @unchecked Sendable, Identifiable {
+    public var id: Int { num }
     public var num: Int
     public var title: String
     public var displayNum: Int?

@@ -114,7 +114,7 @@ public final class RandomIPSessionStore: @unchecked Sendable {
 public final class BackendClient: @unchecked Sendable {
     public static let shared = BackendClient()
 
-    private let store: RandomIPSessionStore
+    let store: RandomIPSessionStore
     private let client: HTTPClient
 
     public init(store: RandomIPSessionStore = .shared, client: HTTPClient = .shared) {
