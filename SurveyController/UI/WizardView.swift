@@ -25,27 +25,12 @@ struct WizardView: View {
 
             Divider()
 
-            ZStack {
-                stepContent
-                    .id(model.wizardStep)
-                    .transition(stepsTransition)
-            }
-            .animation(.spring(response: 0.32, dampingFraction: 0.9), value: model.wizardStep)
-            .clipped()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            stepContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             Divider()
             navBar
         }
-    }
-
-    /// 前进：新页从右淡入；后退：新页从左淡入
-    private var stepsTransition: AnyTransition {
-        let forward = model.wizardDirection >= 0
-        return .asymmetric(
-            insertion: .opacity.combined(with: .move(edge: forward ? .trailing : .leading)),
-            removal: .opacity.combined(with: .move(edge: forward ? .leading : .trailing))
-        )
     }
 
     @ViewBuilder
