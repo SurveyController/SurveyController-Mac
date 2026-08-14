@@ -124,7 +124,9 @@ flowchart TB
 
 ## 参与贡献
 
-欢迎提交 Pull Request，改进方向包括但不限于：
+欢迎提交 Pull Request！开始前请阅读[贡献指南](CONTRIBUTING.md)与[行为准则](CODE_OF_CONDUCT.md)。
+
+改进方向包括但不限于：
 - 腾讯问卷 / Credamo见数 链路移植
 - 信度系数、AI 填空、反填等官方功能对齐
 - macOS 原生特性（菜单栏、快捷键、小组件）
