@@ -30,6 +30,8 @@ public struct RunProgress: @unchecked Sendable {
     public var phase: RunPhase = .idle
     public var successCount: Int = 0
     public var failCount: Int = 0
+    /// 已认领的名额数（含进行中），保证并发下不超目标
+    public var claimedCount: Int = 0
     public var target: Int = 1
     public var slots: [SlotStatus] = []
     public var failureReasons: [String: Int] = [:]
@@ -224,10 +226,11 @@ public final class RunEngine: @unchecked Sendable {
             if stopRequested { break }
 
             // 达到目标份数 → 结束（对标 _should_stop_loop 的 target_reached）
+            // 认领必须原子预留（串行队列内 +1），否则并发槽位会重复认领导致超额提交
             let claimed = withProgress { p -> Int in
-                let claimed = p.successCount + p.failCount + 1
-                guard claimed <= p.target else { return -1 }
-                return claimed
+                p.claimedCount += 1
+                guard p.claimedCount <= p.target else { return -1 }
+                return p.claimedCount
             }
             if claimed < 0 { break }
 
