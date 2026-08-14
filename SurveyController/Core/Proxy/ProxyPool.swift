@@ -149,14 +149,26 @@ public actor ProxyPool {
 
     public var availableCount: Int { available.count }
 
+    /// 地区码（nil/空 = 不限制）；指定地区时默认源使用优质池（对标 _resolve_default_pool_by_area）。
+    public private(set) var areaCode: String?
+
+    /// 从任意执行域设置地区码。
+    public func setAreaCode(_ code: String?) {
+        areaCode = AreaService.normalizeAreaCode(code).isEmpty ? nil : AreaService.normalizeAreaCode(code)
+    }
+
     /// 对标 acquire_submit_proxy：取可用租约，池空时提取一批。
     public func acquire() async throws -> ProxyLease {
         if let lease = popUsable() {
             inUse.insert(lease.address)
             return lease
         }
+        let normalizedArea = AreaService.normalizeAreaCode(areaCode)
+        let pool = normalizedArea.isEmpty
+            ? proxyPoolOrdinary
+            : (AreaService.resolveDefaultPool(areaCode: normalizedArea) ?? proxyPoolOrdinary)
         let fetched = try await provider.fetchBatch(
-            minute: 1, pool: proxyPoolOrdinary, area: nil, count: 1
+            minute: 1, pool: pool, area: normalizedArea.isEmpty ? nil : normalizedArea, count: 1
         )
         for lease in fetched where isUsable(lease) {
             available.append(lease)

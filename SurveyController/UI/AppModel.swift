@@ -3,7 +3,9 @@
 
 import AppKit
 import Foundation
+import IOKit.pwr_mgt
 import Observation
+import UserNotifications
 
 public enum SurveyParsePhase: String {
     case idle
@@ -164,6 +166,9 @@ public final class AppModel {
               ProviderType.isSupportedSurveyUrl(text) else { return nil }
         return text
     }
+
+    /// 随机 IP 地区选择：当前选中的市码（nil/省码 = 全省）
+    public var selectedCityCode: String?
 
     /// 填空题随机整数范围编辑暂存
     public var textIntMin: Int?
@@ -327,7 +332,10 @@ public final class AppModel {
             default:
                 pool = ProxyPool(provider: OfficialProxyProvider())
             }
+            await pool?.setAreaCode(execution.proxyAreaCode)
         }
+
+        beginSleepAssertion()
 
         let engine = RunEngine()
         self.engine = engine
@@ -345,6 +353,14 @@ public final class AppModel {
         engine?.requestStop()
     }
 
+    public func pauseRun() {
+        engine?.requestPause()
+    }
+
+    public func resumeRun() {
+        engine?.resume()
+    }
+
     @MainActor
     private func handleEngineEvent(_ event: RunEngineEvent) {
         switch event {
@@ -355,12 +371,19 @@ public final class AppModel {
         case .finished(let progress):
             self.progress = progress
             self.isRunning = false
+            endSleepAssertion()
+            archiveLogs(summary: progress)
             if progress.phase == .finished {
                 showToast("任务完成：成功 \(progress.successCount) 份")
+                postSystemNotification(title: "任务完成",
+                                       body: "成功 \(progress.successCount) 份，失败 \(progress.failCount) 份")
             } else if progress.phase == .failed {
                 showToast("任务停止：\(progress.stopReason)")
+                postSystemNotification(title: "任务停止", body: progress.stopReason)
             } else {
                 showToast("任务已停止")
+                postSystemNotification(title: "任务已停止",
+                                       body: "成功 \(progress.successCount) 份，失败 \(progress.failCount) 份")
             }
             refreshQuotaFromStore()
         }
@@ -435,6 +458,104 @@ public final class AppModel {
             }
         } catch {
             showToast("兑换失败：\(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - 防休眠（对标 system/power_management.py）
+
+    private var sleepAssertion: IOPMAssertionID = 0
+    private var sleepAssertionActive = false
+
+    private func beginSleepAssertion() {
+        guard !sleepAssertionActive else { return }
+        var assertionId: IOPMAssertionID = 0
+        let result = IOPMAssertionCreateWithName(
+            kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
+            IOPMAssertionLevel(kIOPMAssertionLevelOn),
+            "SurveyController 提交任务运行中" as CFString,
+            &assertionId
+        )
+        if result == kIOReturnSuccess {
+            sleepAssertion = assertionId
+            sleepAssertionActive = true
+            appendLog("已阻止系统休眠（任务运行期间）")
+        }
+    }
+
+    private func endSleepAssertion() {
+        guard sleepAssertionActive else { return }
+        IOPMAssertionRelease(sleepAssertion)
+        sleepAssertionActive = false
+    }
+
+    // MARK: - 系统通知（对标 task_result_system_notification）
+
+    private func postSystemNotification(title: String, body: String) {
+        guard shouldNotifyTaskResult else { return }
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            content.sound = .default
+            let request = UNNotificationRequest(
+                identifier: "task-result-\(UUID().uuidString)",
+                content: content,
+                trigger: nil
+            )
+            center.add(request)
+        }
+    }
+
+    /// 通知开关（设置页可改）
+    public var shouldNotifyTaskResult: Bool {
+        get { UserDefaults.standard.object(forKey: "surveycontroller.notify-task-result") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "surveycontroller.notify-task-result") }
+    }
+
+    // MARK: - 日志落盘（对标 RunLogArchiver，按次存档、保留最近 10 份）
+
+    static var logsDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let directory = base.appendingPathComponent("SurveyController/Logs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private func archiveLogs(summary: RunProgress) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let name = "run-\(formatter.string(from: Date())).log"
+        let content = """
+        # SurveyController 运行日志
+        # 结果：\(summary.phase.rawValue) 成功 \(summary.successCount) 失败 \(summary.failCount)
+        # \(summary.stopReason.isEmpty ? "" : "停止原因：" + summary.stopReason)
+        \(logs.joined(separator: "\n"))
+        """
+        let url = Self.logsDirectory.appendingPathComponent(name)
+        try? content.data(using: .utf8)?.write(to: url)
+        appendLog("日志已存档：\(name)")
+        trimOldLogs(keeping: 10)
+    }
+
+    private func trimOldLogs(keeping count: Int) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(
+            at: Self.logsDirectory,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return }
+        let logs = files.filter { $0.pathExtension == "log" }
+            .compactMap { url -> (URL, Date)? in
+                guard let date = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate else {
+                    return nil
+                }
+                return (url, date)
+            }
+            .sorted { $0.1 > $1.1 }
+        for (url, _) in logs.dropFirst(count) {
+            try? fm.removeItem(at: url)
         }
     }
 

@@ -117,12 +117,18 @@ public final class RunEngine: @unchecked Sendable {
 
     public func requestPause() {
         pauseRequested = true
-        appendLog("任务已请求暂停。")
+        _ = withProgress { $0.phase = .paused }
+        emitProgress()
+        appendLog("任务已暂停。")
     }
 
     public func resume() {
         pauseRequested = false
         resumePaused()
+        _ = withProgress { p in
+            if p.phase == .paused { p.phase = .running }
+        }
+        emitProgress()
         appendLog("任务已继续。")
     }
 

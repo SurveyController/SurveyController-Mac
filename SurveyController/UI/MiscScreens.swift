@@ -68,29 +68,58 @@ struct LogsScreen: View {
 }
 
 struct SettingsScreen: View {
-    let model: AppModel
+    @Bindable var model: AppModel
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                CardView(title: "通知") {
+                    Toggle("任务完成后发送系统通知", isOn: Binding(
+                        get: { model.shouldNotifyTaskResult },
+                        set: { model.shouldNotifyTaskResult = $0 }
+                    ))
+                }
+
                 CardView(title: "配置文件") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("配置目录：\(AppModel.configDirectory.path)")
                             .font(.caption)
-                            .textSelection(.enabled)
                         Button("在 Finder 中打开") {
                             NSWorkspace.shared.open(AppModel.configDirectory)
                         }
                     }
                 }
-                CardView(title: "行为") {
-                    Text("关闭窗口前会自动记住最近一次配置，下次启动自动载入。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+
+                CardView(title: "运行日志存档") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("每次运行自动存档（保留最近 10 份）")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        ForEach(archivedLogs, id: \.self) { url in
+                            Button(url.lastPathComponent) {
+                                NSWorkspace.shared.open(url)
+                            }
+                            .controlSize(.small)
+                        }
+                        Button("在 Finder 中打开日志目录") {
+                            NSWorkspace.shared.open(AppModel.logsDirectory)
+                        }
+                    }
                 }
             }
             .padding(20)
         }
         .background(Color(nsColor: .controlBackgroundColor))
+        .onAppear { archivedLogs = Self.loadLogs() }
+    }
+
+    @State private var archivedLogs: [URL] = []
+
+    static func loadLogs() -> [URL] {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: AppModel.logsDirectory, includingPropertiesForKeys: nil) else {
+            return []
+        }
+        return files.filter { $0.pathExtension == "log" }.sorted { $0.lastPathComponent > $1.lastPathComponent }
     }
 }

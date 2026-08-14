@@ -56,6 +56,21 @@ struct WizardView: View {
             Spacer()
             if model.wizardStep == .run {
                 if model.isRunning {
+                    if model.progress.phase == .paused {
+                        Button {
+                            model.resumeRun()
+                        } label: {
+                            Label("继续", systemImage: "play.fill")
+                        }
+                        .controlSize(.large)
+                    } else {
+                        Button {
+                            model.pauseRun()
+                        } label: {
+                            Label("暂停", systemImage: "pause.fill")
+                        }
+                        .controlSize(.large)
+                    }
                     Button("停止任务") { model.stopRun() }
                         .controlSize(.large)
                 } else {
@@ -288,6 +303,10 @@ struct NetworkStepView: View {
                                 .disabled(model.isRunning)
                         }
 
+                        if model.runtimeConfig.proxySource != proxySourceCustom {
+                            areaPicker
+                        }
+
                         HStack(spacing: 10) {
                             Button("领取试用") { Task { await model.activateTrial() } }
                                 .disabled(model.quotaLoading || model.isRunning)
@@ -330,6 +349,73 @@ struct NetworkStepView: View {
         .task { await model.syncQuotaFromServer(silent: true) }
     }
 
+    @State private var selectedProvinceName: String = "不限"
+
+    /// 地区选择：不限 / 省 / 全省任一市（对标 random_ip_card 的省市联动）。
+    private var areaPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Picker("省份", selection: $selectedProvinceName) {
+                    Text("不限制").tag("不限")
+                    ForEach(AreaService.provinces()) { province in
+                        Text(province.name).tag(province.name)
+                    }
+                }
+                .frame(width: 180)
+                .disabled(model.isRunning)
+
+                if let province = AreaService.findProvince(byName: selectedProvinceName) {
+                    Picker("城市", selection: Binding(
+                        get: { model.selectedCityCode },
+                        set: { model.selectedCityCode = $0 }
+                    )) {
+                        Text("全省").tag(province.code)
+                        ForEach(province.cities) { city in
+                            Text(city.name).tag(city.code)
+                        }
+                    }
+                    .frame(width: 180)
+                    .disabled(model.isRunning)
+                }
+            }
+            Text("当前：\(AreaService.describe(areaCode: effectiveAreaCode))\(effectiveAreaCode.isEmpty ? "" : "（\(effectiveAreaCode)）")；指定地区将自动使用优质 IP 池")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onChange(of: selectedProvinceName) { _, newValue in
+            // 切省时城市回落到全省
+            if let province = AreaService.findProvince(byName: newValue) {
+                model.selectedCityCode = province.code
+                model.runtimeConfig.proxyAreaCode = province.code
+            } else {
+                model.selectedCityCode = nil
+                model.runtimeConfig.proxyAreaCode = nil
+            }
+        }
+        .onAppear {
+            if let code = model.runtimeConfig.proxyAreaCode, !code.isEmpty {
+                // 从配置恢复省份选择
+                for province in AreaService.provinces() {
+                    if province.code == code {
+                        selectedProvinceName = province.name
+                        model.selectedCityCode = code
+                        return
+                    }
+                    if let city = province.cities.first(where: { $0.code == code }) {
+                        selectedProvinceName = province.name
+                        model.selectedCityCode = code
+                        return
+                    }
+                }
+            }
+        }
+    }
+
+    private var effectiveAreaCode: String {
+        if selectedProvinceName == "不限" { return "" }
+        return AreaService.normalizeAreaCode(model.selectedCityCode ?? model.runtimeConfig.proxyAreaCode)
+    }
+
     private func uaRatio(_ title: String, _ key: String) -> some View {
         HStack {
             Text(title).frame(width: 90, alignment: .leading)
@@ -357,6 +443,15 @@ struct CheckStepView: View {
         let report = model.preflight
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Spacer()
+                    Button {
+                        exportConfig()
+                    } label: {
+                        Label("导出配置", systemImage: "square.and.arrow.up")
+                    }
+                    .controlSize(.small)
+                }
                 CardView(title: "配置摘要") {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(Array(report.summary.enumerated()), id: \.offset) { _, line in
@@ -388,6 +483,16 @@ struct CheckStepView: View {
             }
             .padding(24)
             .frame(maxWidth: 720, alignment: .leading)
+        }
+    }
+
+    private func exportConfig() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = model.surveyTitle.isEmpty ? "wjx_config.json" : "\(model.surveyTitle).json"
+        panel.directoryURL = AppModel.configDirectory
+        if panel.runModal() == .OK, let url = panel.url {
+            model.exportConfig(to: url)
         }
     }
 }
