@@ -6,7 +6,7 @@ import Foundation
 /// 应用版本与 GitHub 仓库信息。
 public enum AppVersion {
     /// 当前版本（与 MARKETING_VERSION 同步）。
-    public static let version = "0.1.0"
+    public static let version = "0.1.1"
     /// 当前对齐的官方桌面端版本。
     public static let alignedOfficialVersion = "4.0.6"
 
