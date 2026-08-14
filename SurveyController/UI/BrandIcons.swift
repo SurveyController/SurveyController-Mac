@@ -37,6 +37,10 @@ enum SVGPathParser {
                 dotInCurrentNumber = true
                 previousIsNumberish = true
             case let c where c.isLetter:
+                // 数字后紧跟命令字母（如 ".297c-6.63" / "-1.61C4.422"）必须分词
+                if previousIsNumberish {
+                    normalized.append(" ")
+                }
                 normalized.append(c)
                 dotInCurrentNumber = false
                 previousIsNumberish = false
