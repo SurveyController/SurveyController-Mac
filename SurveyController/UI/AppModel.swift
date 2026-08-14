@@ -29,12 +29,80 @@ public final class AppModel {
 
     public var runtimeConfig = RuntimeConfig()
 
+    // MARK: - 向导状态（对标官方 5.0 向导式流程）
+
+    public enum WizardStep: Int, CaseIterable, Identifiable {
+        case survey = 1, answers, task, network, check, run
+        public var id: Int { rawValue }
+
+        public var title: String {
+            switch self {
+            case .survey: return "问卷"
+            case .answers: return "答案"
+            case .task: return "任务"
+            case .network: return "网络"
+            case .check: return "检查"
+            case .run: return "运行"
+            }
+        }
+    }
+
+    public var wizardStep: WizardStep = .survey
+    /// 向导中已解锁到的最远步骤（可回退点击）
+    public var maxReachedStep: WizardStep = .survey
+    /// 答案编辑页当前选中的题目下标
+    public var selectedQuestionIndex: Int = 0
+
+    public func goToStep(_ step: WizardStep) {
+        wizardStep = step
+        if step.rawValue > maxReachedStep.rawValue {
+            maxReachedStep = step
+        }
+    }
+
+    public func nextStep() {
+        if let next = WizardStep(rawValue: wizardStep.rawValue + 1) {
+            goToStep(next)
+        }
+    }
+
+    public func previousStep() {
+        if let previous = WizardStep(rawValue: wizardStep.rawValue - 1) {
+            wizardStep = previous
+        }
+    }
+
+    /// 当前步骤是否允许继续（向导的分步校验）。
+    public var currentStepValid: Bool {
+        switch wizardStep {
+        case .survey:
+            return parsePhase == .ready
+        case .answers:
+            return !runtimeConfig.questionEntries.isEmpty
+        case .task:
+            return runtimeConfig.target >= 1 && runtimeConfig.threads >= 1
+        case .network:
+            if runtimeConfig.randomIpEnabled && runtimeConfig.proxySource == proxySourceCustom {
+                return !runtimeConfig.customProxyApi.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+            return true
+        case .check:
+            return preflight.errors.isEmpty
+        case .run:
+            return true
+        }
+    }
+
     // MARK: - 运行状态
 
     public var isRunning: Bool = false
     public var progress: RunProgress = RunProgress()
     public var logs: [String] = []
     public var toastMessage: String = ""
+
+    /// 填空题随机整数范围编辑暂存
+    public var textIntMin: Int?
+    public var textIntMax: Int?
 
     // MARK: - 随机IP额度
 
@@ -90,11 +158,84 @@ public final class AppModel {
                 appendLog("已剔除 \(stats["unsupported"] ?? 0) 条不适用的条件规则")
             }
             parsePhase = .ready
+            selectedQuestionIndex = 0
             appendLog("解析成功：\(result.title)（\(result.questions.count) 题）")
+            goToStep(.answers)
         } catch {
             parseError = error.localizedDescription
             parsePhase = .failed
             appendLog("解析失败：\(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - 运行前检查（对标 ConfigPreflight 的门禁思路）
+
+    public struct PreflightReport {
+        public var errors: [String] = []
+        public var warnings: [String] = []
+        public var summary: [String] = []
+    }
+
+    public var preflight: PreflightReport {
+        var report = PreflightReport()
+        let questions = runtimeConfig.questionsInfo
+        let entries = runtimeConfig.questionEntries
+
+        if parsePhase != .ready {
+            report.errors.append("问卷尚未解析，请回到第 1 步完成解析")
+        }
+        if questions.isEmpty {
+            report.errors.append("题目清单为空")
+        }
+        if entries.isEmpty {
+            report.errors.append("没有可用的作答配置")
+        }
+
+        let unsupported = questions.filter { $0.unsupported }
+        if !unsupported.isEmpty {
+            report.errors.append("第 \(unsupported.map { String($0.num) }.joined(separator: "、")) 题暂不支持：\(unsupported.first?.unsupportedReason ?? "")")
+        }
+
+        let logicReason = HttpLogicPlanner.fallbackReason(questions)
+        if !logicReason.isEmpty {
+            report.errors.append(logicReason + "，纯 HTTP 提交可能失败")
+        }
+
+        let unconfigured = questions.filter { question in
+            !entries.contains { $0.questionNum == question.num }
+        }
+        if !unconfigured.isEmpty {
+            report.errors.append("第 \(unconfigured.map { String($0.num) }.joined(separator: "、")) 题缺少作答配置")
+        }
+
+        report.summary.append("问卷：\(surveyTitle.isEmpty ? "—" : surveyTitle)（\(questions.count) 题，\(providerLabel)）")
+        report.summary.append("目标：\(runtimeConfig.target) 份，并发 \(runtimeConfig.threads)，间隔 \(runtimeConfig.submitInterval.0)~\(runtimeConfig.submitInterval.1) 秒")
+        report.summary.append("作答时长：\(runtimeConfig.answerDuration.0)~\(runtimeConfig.answerDuration.1) 秒（影响问卷后台记录的耗时）")
+        report.summary.append(runtimeConfig.randomIpEnabled
+            ? "随机 IP：启用（来源 \(runtimeConfig.proxySource)\(runtimeConfig.proxySource == proxySourceCustom ? "" : "，剩余额度 \(quotaRemaining)"))）"
+            : "随机 IP：未启用（本机直连提交）")
+        report.summary.append(runtimeConfig.randomUaEnabled
+            ? "随机 UA：启用（微信 \(runtimeConfig.randomUaRatios["wechat"] ?? 0)% / 手机 \(runtimeConfig.randomUaRatios["mobile"] ?? 0)% / 电脑 \(runtimeConfig.randomUaRatios["pc"] ?? 0)%）"
+            : "随机 UA：未启用（默认电脑网页端 UA）")
+
+        if runtimeConfig.randomIpEnabled && quotaKnown && quotaRemaining < Double(runtimeConfig.target) {
+            report.warnings.append("随机 IP 剩余额度 \(quotaRemaining) 低于目标份数 \(runtimeConfig.target)，中途可能因额度不足停止")
+        }
+        if !runtimeConfig.randomIpEnabled && runtimeConfig.target > 3 {
+            report.warnings.append("直连提交较多份数容易触发问卷星智能验证，建议启用随机 IP")
+        }
+        if runtimeConfig.answerDuration.0 < 30 {
+            report.warnings.append("作答时长过短（<30 秒）容易被判定为无效答卷")
+        }
+        report.warnings.append("AI 填空尚未接入：填空题将使用固定/随机文本")
+        return report
+    }
+
+    public var providerLabel: String {
+        switch surveyProvider {
+        case .wjx: return "问卷星"
+        case .qq: return "腾讯问卷"
+        case .credamo: return "见数"
         }
     }
 
@@ -108,6 +249,7 @@ public final class AppModel {
         guard canStart else { return }
         isRunning = true
         logs.removeAll()
+        goToStep(.run)
 
         let snapshot = ConfigCodec.buildRuntimeConfigSnapshot(runtimeConfig)
         let execution = ExecutionConfigBuilder.build(from: snapshot)

@@ -1,61 +1,55 @@
-// 对标 software/ui/shell/main_window.py
-// 主窗口：NavigationSplitView 侧边导航（概览/运行参数/日志 + 设置/关于）。
+// 对标官方 5.0 主窗口：左侧 任务/日志/设置/更多，任务页为 6 步向导。
 
 import SwiftUI
 
 enum AppPage: String, Hashable, Identifiable, CaseIterable {
-    case overview = "概览"
-    case runtime = "运行参数"
+    case task = "任务"
     case logs = "日志"
     case settings = "设置"
-    case about = "关于"
+    case about = "更多"
 
     var id: String { rawValue }
 
     var systemImage: String {
         switch self {
-        case .overview: return "square.grid.2x2"
-        case .runtime: return "slider.horizontal.3"
+        case .task: return "house"
         case .logs: return "doc.text"
         case .settings: return "gearshape"
-        case .about: return "info.circle"
+        case .about: return "ellipsis.circle"
         }
     }
 }
 
 struct MainWindow: View {
     @State private var model = AppModel()
-    @State private var selection: AppPage? = .overview
+    @State private var selection: AppPage? = .task
 
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                Section("工作台") {
-                    ForEach([AppPage.overview, .runtime, .logs]) { page in
-                        Label(page.rawValue, systemImage: page.systemImage)
-                            .tag(page)
-                    }
+                Section {
+                    Label(AppPage.task.rawValue, systemImage: AppPage.task.systemImage)
+                        .tag(AppPage.task)
                 }
                 Section("更多") {
-                    ForEach([AppPage.settings, .about]) { page in
+                    ForEach([AppPage.logs, .settings, .about]) { page in
                         Label(page.rawValue, systemImage: page.systemImage)
                             .tag(page)
                     }
                 }
             }
-            .navigationSplitViewColumnWidth(min: 170, ideal: 190)
+            .navigationSplitViewColumnWidth(min: 160, ideal: 180)
         } detail: {
             switch selection {
-            case .overview: OverviewScreen(model: model)
-            case .runtime: RuntimeScreen(model: model)
+            case .task: WizardView(model: model)
             case .logs: LogsScreen(model: model)
             case .settings: SettingsScreen(model: model)
             case .about: AboutScreen()
-            case nil: OverviewScreen(model: model)
+            case nil: WizardView(model: model)
             }
         }
-        .navigationTitle("SurveyController")
-        .frame(minWidth: 940, minHeight: 620)
+        .navigationTitle("SurveyController \(AppVersion.version)")
+        .frame(minWidth: 960, minHeight: 640)
         .overlay(alignment: .bottom) {
             if !model.toastMessage.isEmpty {
                 toastView
