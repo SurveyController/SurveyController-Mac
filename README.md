@@ -28,6 +28,10 @@
 5. **配置导入导出** - 与桌面版配置文件互通，跨设备同步
 6. **AI 主观题作答** - 填空题自动生成作答内容（自定义服务商）
 
+## 演示视频
+
+https://github.com/SurveyController/SurveyController-Mac/releases/download/v0.1.0/demo.mp4
+
 ## 开始使用
 
 > [!TIP]
