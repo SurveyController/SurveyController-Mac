@@ -48,7 +48,7 @@ public enum WjxProvider {
 
     // MARK: - 提交（对标 brush_wjx_http）
 
-    public struct SubmitContext {
+    public struct SubmitContext: @unchecked Sendable {
         public var state: ExecutionState
         public var threadName: String
         public var userAgent: String?
