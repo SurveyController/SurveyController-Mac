@@ -150,6 +150,30 @@ public final class HTTPClient: @unchecked Sendable {
         return try await send(request, proxyAddress: proxyAddress)
     }
 
+    /// multipart/form-data 提交（对标联系表单的 requests files= 用法；v0.1 仅文本字段）。
+    public func postMultipart(
+        _ urlString: String,
+        fields: [String: String],
+        headers: [String: String]
+    ) async throws -> HTTPResponse {
+        let boundary = "SurveyController-\(UUID().uuidString)"
+        var body = Data()
+        for (name, value) in fields.sorted(by: { $0.key < $1.key }) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append(value.data(using: .utf8)!)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var multipartHeaders = headers
+        multipartHeaders["Content-Type"] = "multipart/form-data; boundary=\(boundary)"
+        let request = try self.request(
+            method: "POST", urlString: urlString, headers: multipartHeaders, body: body
+        )
+        return try await send(request, proxyAddress: nil)
+    }
+
     public func postJSON(
         _ urlString: String,
         query: [String: String] = [:],

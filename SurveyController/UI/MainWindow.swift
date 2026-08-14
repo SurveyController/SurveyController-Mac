@@ -4,8 +4,9 @@ import SwiftUI
 
 enum AppPage: String, Hashable, Identifiable, CaseIterable {
     case task = "任务"
-    case logs = "日志"
     case settings = "设置"
+    case community = "社区"
+    case logs = "日志"
     case about = "更多"
 
     var id: String { rawValue }
@@ -13,8 +14,9 @@ enum AppPage: String, Hashable, Identifiable, CaseIterable {
     var systemImage: String {
         switch self {
         case .task: return "house"
-        case .logs: return "doc.text"
         case .settings: return "gearshape"
+        case .community: return "bubble.left.and.bubble.right"
+        case .logs: return "doc.text"
         case .about: return "ellipsis.circle"
         }
     }
@@ -32,7 +34,7 @@ struct MainWindow: View {
                         .tag(AppPage.task)
                 }
                 Section("更多") {
-                    ForEach([AppPage.logs, .settings, .about]) { page in
+                    ForEach([AppPage.settings, .community, .logs, .about]) { page in
                         Label(page.rawValue, systemImage: page.systemImage)
                             .tag(page)
                     }
@@ -42,8 +44,9 @@ struct MainWindow: View {
         } detail: {
             switch selection {
             case .task: WizardView(model: model)
-            case .logs: LogsScreen(model: model)
             case .settings: SettingsScreen(model: model)
+            case .community: CommunityScreen()
+            case .logs: LogsScreen(model: model)
             case .about: AboutScreen()
             case nil: WizardView(model: model)
             }
