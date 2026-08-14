@@ -1,0 +1,23 @@
+# Xcode
+DerivedData/
+build/
+*.xcarchive
+xcuserdata/
+*.xcuserstate
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+# Xcode 16+ per-user breakpoints
+xcdebugger/
+
+# Swift Package Manager
+.build/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# 签名与本地配置（后续 Developer ID 公证时使用，不入库）
+*.p12
+*.cer
+ExportOptions.plist
+NotarizeInfo.plist

@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Release App
+        run: |
+          xcodebuild -project SurveyController.xcodeproj \
+            -scheme SurveyController \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Package
+        run: |
+          APP_PATH="build/Build/Products/Release/SurveyController.app"
+          if [ ! -d "$APP_PATH" ]; then
+            APP_PATH=$(find build/Build/Products -name 'SurveyController.app' -type d | head -1)
+          fi
+          VERSION=${GITHUB_REF_NAME#v}
+          ditto -c -k --keepParent "$APP_PATH" "SurveyController-v${VERSION}-macOS.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: SurveyController-v*-macOS.zip
+          generate_release_notes: true
