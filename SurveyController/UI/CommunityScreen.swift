@@ -103,12 +103,21 @@ struct CommunityScreen: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Button("Mac 仓库") {
+            HStack(spacing: 10) {
+                Button {
                     NSWorkspace.shared.open(URL(string: "https://github.com/SurveyController/SurveyController-Mac")!)
+                } label: {
+                    Label("Mac 版", systemImage: "desktopcomputer")
                 }
-                Button("官方主仓库") {
+                Button {
                     NSWorkspace.shared.open(URL(string: "https://github.com/SurveyController/SurveyController")!)
+                } label: {
+                    Label("Windows 版", systemImage: "macwindow.on.rectangle")
+                }
+                Button {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/shiaho777/SurveyController-Android")!)
+                } label: {
+                    Label("Android 版", systemImage: "candybarphone")
                 }
             }
         })
