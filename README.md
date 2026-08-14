@@ -30,7 +30,9 @@
 
 ## 演示视频
 
-https://github.com/SurveyController/SurveyController-Mac/releases/download/v0.1.0/demo.mp4
+![演示视频](https://github.com/SurveyController/SurveyController-Mac/releases/download/v0.1.0/demo.gif)
+
+> 高清带声音版本：[demo.mp4](https://github.com/SurveyController/SurveyController-Mac/releases/download/v0.1.0/demo.mp4)
 
 ## 开始使用
 
