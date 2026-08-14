@@ -1,6 +1,7 @@
 // 对标 software/ui/controller/run_controller.py + run_state_store.py
 // 中央视图模型：解析、配置、运行、日志、随机IP额度的唯一事实来源。
 
+import AppKit
 import Foundation
 import Observation
 
@@ -99,6 +100,70 @@ public final class AppModel {
     public var progress: RunProgress = RunProgress()
     public var logs: [String] = []
     public var toastMessage: String = ""
+
+    // MARK: - 检查更新（对标 about 页 check update）
+
+    public enum UpdateState: Equatable {
+        case idle
+        case checking
+        case latest
+        case outdated(version: String, url: String)
+        case failed(String)
+    }
+
+    public var updateState: UpdateState = .idle
+
+    public func checkForUpdates() async {
+        switch updateState {
+        case .idle, .failed:
+            break
+        default:
+            return
+        }
+        updateState = .checking
+        do {
+            let response = try await HTTPClient.shared.get(
+                "https://api.github.com/repos/\(AppVersion.githubOwner)/\(AppVersion.githubRepo)/releases/latest",
+                headers: ["Accept": "application/vnd.github+json"]
+            )
+            try response.raiseForStatus()
+            guard let payload = try? JSONSerialization.jsonObject(with: response.body) as? [String: Any] else {
+                updateState = .failed("响应解析失败")
+                return
+            }
+            let tagName = JSONCoercion.asTrimmedString(payload["tag_name"])
+            let htmlUrl = JSONCoercion.asTrimmedString(payload["html_url"])
+            let version = tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
+            if version.isEmpty {
+                updateState = .failed("尚未发布任何版本")
+                return
+            }
+            if AppVersion.compareSemVer(AppVersion.version, version) >= 0 {
+                updateState = .latest
+            } else {
+                updateState = .outdated(version: version,
+                                         url: htmlUrl.isEmpty ? "https://github.com/\(AppVersion.githubOwner)/\(AppVersion.githubRepo)/releases/latest" : htmlUrl)
+            }
+        } catch {
+            updateState = .failed(error.localizedDescription)
+        }
+    }
+
+    public func openReleasePage(_ url: String) {
+        if let target = URL(string: url) {
+            NSWorkspace.shared.open(target)
+        }
+    }
+
+    /// 剪贴板中可用的问卷链接（无则 nil）。
+    public var clipboardSurveyUrl: String? {
+        guard let text = NSPasteboard.general.string(forType: .string)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty,
+              text.lowercased().hasPrefix("http"),
+              ProviderType.isSupportedSurveyUrl(text) else { return nil }
+        return text
+    }
 
     /// 填空题随机整数范围编辑暂存
     public var textIntMin: Int?

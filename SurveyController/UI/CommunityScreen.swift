@@ -37,7 +37,7 @@ struct CommunityScreen: View {
     // MARK: - QQ 群
 
     private var qqCard: some View {
-        CommunityCard(title: "QQ 群交流", systemImage: "bubble.left.and.bubble.right.fill") {
+        CommunityCard(title: "QQ 群交流", icon: { SFIcon(systemImage: "bubble.left.and.bubble.right.fill") }, content: {
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("扫码加入 QQ 交流群，实时获取最新版本、反馈问题、交流使用经验、订阅最新的服务情况")
@@ -70,7 +70,7 @@ struct CommunityScreen: View {
                 }
             }
             Button("打开二维码") { Self.openQrImage() }
-        }
+        })
     }
 
     static var qrImage: NSImage? {
@@ -86,19 +86,19 @@ struct CommunityScreen: View {
     // MARK: - 联系开发者
 
     private var contactCard: some View {
-        CommunityCard(title: "联系开发者", systemImage: "paperplane.fill") {
+        CommunityCard(title: "联系开发者", icon: { FeedbackIcon(size: 22) }, content: {
             Text("遇到问题？有建议？不想加 QQ 群？\n可以直接在此处与我们沟通，我们会尽快回复。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button("发送消息") { showContactSheet = true }
-        }
+        })
     }
 
     // MARK: - 参与贡献
 
     private var contributeCard: some View {
-        CommunityCard(title: "参与贡献", systemImage: "wrench.and.screwdriver") {
+        CommunityCard(title: "参与贡献", icon: { GitHubIcon(size: 22) }, content: {
             Text("我们接受开发、设计、测试、提供创新性想法、反馈报错等任何贡献形式\n相信我们能够一起把项目做得更好。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -111,13 +111,13 @@ struct CommunityScreen: View {
                     NSWorkspace.shared.open(URL(string: "https://github.com/SurveyController/SurveyController")!)
                 }
             }
-        }
+        })
     }
 
     // MARK: - 开源许可
 
     private var licenseCard: some View {
-        CommunityCard(title: "开源许可", systemImage: "checkmark.seal.fill") {
+        CommunityCard(title: "开源许可", icon: { DocsIcon(size: 22) }, content: {
             Text("GPL-3.0")
                 .font(.system(size: 17, weight: .semibold))
             Text("分发程序或修改版本时，必须按 GPL-3.0 要求提供相应源代码，确保接收者获得使用、研究、修改和再分发的自由")
@@ -127,23 +127,32 @@ struct CommunityScreen: View {
             Button("查看协议") {
                 NSWorkspace.shared.open(URL(string: "https://github.com/SurveyController/SurveyController-Mac/blob/main/LICENSE")!)
             }
-        }
+        })
     }
 }
 
 // MARK: - 卡片容器
 
-struct CommunityCard<Content: View>: View {
+struct CommunityCard<Icon: View, Content: View>: View {
     let title: String
-    let systemImage: String
-    @ViewBuilder var content: Content
+    let icon: Icon
+    let content: Content
+
+    init(
+        title: String,
+        @ViewBuilder icon: () -> Icon,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.icon = icon()
+        self.content = content()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .foregroundStyle(.tint)
-                    .frame(width: 22, height: 22)
+            HStack(spacing: 10) {
+                icon
+                    .frame(width: 26, height: 26)
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
@@ -155,6 +164,15 @@ struct CommunityCard<Content: View>: View {
         .frame(maxWidth: .infinity, minHeight: 200, alignment: .topLeading)
         .background(.background, in: RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+    }
+}
+
+struct SFIcon: View {
+    let systemImage: String
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 18))
+            .foregroundStyle(.tint)
     }
 }
 

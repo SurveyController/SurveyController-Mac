@@ -117,6 +117,11 @@ struct AnswerConfigEditor: View {
                         .monospacedDigit()
                         .frame(width: 36, alignment: .trailing)
                         .foregroundStyle(.secondary)
+                    Text(normalizedPercent(question, index: index))
+                        .monospacedDigit()
+                        .font(.caption)
+                        .frame(width: 48, alignment: .trailing)
+                        .foregroundStyle(Color.accentColor)
                 }
             }
             if question.forcedOptionIndex != nil {
@@ -266,6 +271,17 @@ struct AnswerConfigEditor: View {
     private func optionList(_ question: SurveyQuestionMeta) -> [String] {
         if !question.optionTexts.isEmpty { return question.optionTexts }
         return (0..<max(1, question.options)).map { "选项 \($0 + 1)" }
+    }
+
+    /// 实时归一化百分比（权重总和为 0 时显示 均匀）。
+    private func normalizedPercent(_ question: SurveyQuestionMeta, index: Int) -> String {
+        let count = optionList(question).count
+        guard count > 0 else { return "" }
+        var total = 0.0
+        for i in 0..<count { total += currentWeight(question, index: i) }
+        guard total > 0 else { return "\(Int(100.0 / Double(count)))%" }
+        let percent = currentWeight(question, index: index) / total * 100
+        return "\(Int(percent.rounded()))%"
     }
 
     private func currentWeights(_ entry: QuestionEntry) -> [Double] {

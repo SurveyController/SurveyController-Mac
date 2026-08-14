@@ -112,20 +112,38 @@ struct SurveyStepView: View {
             .padding(.top, 12)
 
             Spacer()
-            VStack(spacing: 18) {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.tint)
+            VStack(spacing: 20) {
+                ZStack {
+                    Circle()
+                        .fill(.quinary)
+                        .frame(width: 92, height: 92)
+                    Circle()
+                        .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 2)
+                        .frame(width: 92, height: 92)
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 38))
+                        .foregroundStyle(.tint)
+                }
                 Text("添加要填写的问卷")
                     .font(.title2.bold())
                 Text("粘贴问卷星链接，解析成功后自动进入答案配置")
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 10) {
-                    TextField("问卷链接（如 https://www.wjx.cn/vm/xxxx.aspx）", text: $model.surveyUrl)
+                    Image(systemName: "link")
+                        .foregroundStyle(.tertiary)
+                    TextField("https://www.wjx.cn/vm/xxxx.aspx", text: $model.surveyUrl)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 460)
+                        .frame(width: 430)
                         .disabled(model.isRunning)
+                        .onSubmit { Task { await model.parseSurvey() } }
+                    if let clipboardUrl = model.clipboardSurveyUrl, clipboardUrl != model.surveyUrl {
+                        Button {
+                            model.surveyUrl = clipboardUrl
+                        } label: {
+                            Label("粘贴", systemImage: "doc.on.clipboard")
+                        }
+                    }
                     if model.parsePhase == .parsing {
                         ProgressView().controlSize(.small)
                     }
@@ -137,9 +155,17 @@ struct SurveyStepView: View {
                         .frame(maxWidth: 520)
                 }
                 if model.parsePhase == .ready {
-                    Label("已解析：\(model.surveyTitle)（\(model.runtimeConfig.questionsInfo.count) 题）",
-                          systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                    HStack(spacing: 12) {
+                        Label("已解析：\(model.surveyTitle)（\(model.runtimeConfig.questionsInfo.count) 题）",
+                              systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        if let url = URL(string: model.surveyUrl), url.scheme != nil {
+                            Link(destination: url) {
+                                Label("查看问卷", systemImage: "safari")
+                                    .font(.caption)
+                            }
+                        }
+                    }
                 }
             }
             Spacer()

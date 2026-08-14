@@ -61,13 +61,30 @@ struct MainWindow: View {
     }
 
     private var toastView: some View {
-        Text(model.toastMessage)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .shadow(radius: 6)
-            .padding(.bottom, 18)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+        HStack(spacing: 8) {
+            Image(systemName: toastIcon)
+                .foregroundStyle(toastColor)
+            Text(model.toastMessage)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(toastColor.opacity(0.35)))
+        .shadow(radius: 6)
+        .padding(.bottom, 18)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private var toastIcon: String {
+        if model.toastMessage.contains("成功") || model.toastMessage.contains("完成") { return "checkmark.circle.fill" }
+        if model.toastMessage.contains("失败") || model.toastMessage.contains("错误") { return "xmark.circle.fill" }
+        return "info.circle.fill"
+    }
+
+    private var toastColor: Color {
+        if model.toastMessage.contains("成功") || model.toastMessage.contains("完成") { return .green }
+        if model.toastMessage.contains("失败") || model.toastMessage.contains("错误") { return .red }
+        return .accentColor
     }
 }
 
