@@ -36,7 +36,7 @@
 ## 开始使用
 
 > [!TIP]
-> **安装包：** 前往 [发行版](https://github.com/SurveyController/SurveyController-Mac/releases/latest) 下载最新版本压缩包，解压后拖入「应用程序」文件夹即可
+> **安装包：** 前往 [发行版](https://github.com/SurveyController/SurveyController-Mac/releases/latest) 下载最新版本 DMG，打开后把 SurveyController 拖入「应用程序」文件夹即可
 
 **系统要求：** macOS 14（Sonoma）及以上
 

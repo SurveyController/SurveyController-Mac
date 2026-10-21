@@ -33,8 +33,21 @@ jobs:
           VERSION=${GITHUB_REF_NAME#v}
           ditto -c -k --keepParent "$APP_PATH" "SurveyController-v${VERSION}-macOS.zip"
 
+          STAGE=$(mktemp -d)
+          cp -R "$APP_PATH" "$STAGE/SurveyController.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create \
+            -volname "SurveyController" \
+            -srcfolder "$STAGE" \
+            -ov \
+            -format UDZO \
+            "SurveyController-v${VERSION}-macOS.dmg"
+          rm -rf "$STAGE"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: SurveyController-v*-macOS.zip
+          files: |
+            SurveyController-v*-macOS.zip
+            SurveyController-v*-macOS.dmg
           generate_release_notes: true
