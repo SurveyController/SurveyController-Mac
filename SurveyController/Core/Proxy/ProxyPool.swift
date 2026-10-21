@@ -47,7 +47,7 @@ public struct OfficialProxyProvider: ProxyProvider {
             leases.append(ProxyLease(
                 address: proxy.address,
                 expireAt: expireAt,
-                ttlSufficient: expireAt <= 0 || expireAt - Date().timeIntervalSince1970 > 60
+                ttlSufficient: expireAt <= 0 || expireAt - Date().timeIntervalSince1970 >= ProxyPool.minTtlSeconds
             ))
         }
         return leases
@@ -134,7 +134,9 @@ public struct CustomProxyProvider: ProxyProvider {
 /// 对标 session_policy 的代理池（actor 保证并发安全，替代 Python 锁）。
 public actor ProxyPool {
     public static let cooldownSeconds: TimeInterval = 45
-    public static let minTtlSeconds: TimeInterval = 60
+    /// 纯 HTTP 链路不设置预留时长门槛；仍由 expireAt 判断代理是否已经过期。
+    /// 对标 HTTP_PROXY_MIN_REMAINING_TTL_SECONDS（官方 aca7b90，#103）。
+    public static let minTtlSeconds: TimeInterval = 0
 
     private var available: [ProxyLease] = []
     private var inUse: Set<String> = []
@@ -203,8 +205,9 @@ public actor ProxyPool {
         if inUse.contains(lease.address) || blocked.contains(lease.address) { return false }
         if let until = cooldowns[lease.address], until > Date() { return false }
         if lease.expireAt > 0 {
-            if Date().timeIntervalSince1970 >= lease.expireAt { return false }
-            if lease.expireAt - Date().timeIntervalSince1970 < Self.minTtlSeconds { return false }
+            // 对标 proxy_lease_has_sufficient_ttl：剩余时长 >= 门槛才可用。门槛为 0 时，未过期即保留。
+            let remaining = lease.expireAt - Date().timeIntervalSince1970
+            if remaining < Self.minTtlSeconds { return false }
         }
         return true
     }
