@@ -63,6 +63,20 @@ final class ProxyPoolTests: XCTestCase {
         XCTAssertEqual(lease.address, "5.5.5.5:80")
     }
 
+    /// 对标 test_merge_prefetched_proxy_leases_keeps_future_proxy_without_ttl_floor：
+    /// 已提取、尚未过期的代理必须使用，不能因客户端预留时长被丢弃。
+    func test_future_lease_is_kept_without_ttl_floor() async throws {
+        XCTAssertEqual(ProxyPool.minTtlSeconds, 0)
+        let now = Date().timeIntervalSince1970
+        let provider = ScriptedProxyProvider(batches: [[
+            ProxyLease(address: "1.1.1.1:8000", expireAt: now + 5),
+            ProxyLease(address: "2.2.2.2:8000", expireAt: now - 1),
+        ]])
+        let pool = ProxyPool(provider: provider)
+        let lease = try await pool.acquire()
+        XCTAssertEqual(lease.address, "1.1.1.1:8000")
+    }
+
     func test_empty_provider_raises_unavailable() async {
         let pool = ProxyPool(provider: ScriptedProxyProvider(batches: []))
         do {
