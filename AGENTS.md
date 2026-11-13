@@ -8,7 +8,7 @@
 - **项目性质**：SurveyController 官方 Windows 桌面端的 **macOS 端独立移植版**
 - **GitHub 仓库**：https://github.com/SurveyController/SurveyController-Mac
 - **License**：GPL-3.0（与官方一致）
-- **当前版本**：v0.1.0（开发中，逐步对齐官方 v4.0.6）
+- **当前版本**：v0.2.0（开发中，逐步对齐官方 v4.1.0）
 
 ## 官方源仓库
 
@@ -118,6 +118,7 @@ xcodebuild -project SurveyController.xcodeproj -scheme SurveyController \
 - `core/config/`（schema + codec v6）→ `Core/Model/RuntimeConfig.swift` + `Data/ConfigCodec.swift`（与桌面版配置文件互通）
 - `core/questions/`（概率/文本/一致性查询）+ `providers/http_logic.py` → `Core/Questions/`
 - `wjx/provider/`（html_parser* + http_runtime 纯函数 + regexes + multiple_limits）→ `Provider/Wjx/`
+- `wjx/provider/multilevel.py` → `Provider/Wjx/WjxMultilevel.swift`（多级下拉解析、选项拉取、提交映射）
 - `wjx/provider/answering_builders.py` → `Provider/Wjx/WjxAnswerBuilder.swift`（简化点见下）
 - `core/task/task_context.py` + engine → `Core/Model/ExecutionConfig.swift` + `Core/Engine/RunEngine.swift`
 - `network/proxy/session/` + `session_policy.py` → `Core/Backend/BackendClient.swift` + `Core/Proxy/ProxyPool.swift`

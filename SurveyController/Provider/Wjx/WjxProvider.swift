@@ -41,7 +41,10 @@ public enum WjxProvider {
         }
 
         try WjxHtmlParser.raiseWjxPageStateErrors(html)
-        let questions = try WjxHtmlParser.parseSurveyQuestions(fromHtml: html)
+        let parsedQuestions = try WjxHtmlParser.parseSurveyQuestions(fromHtml: html)
+        let questions = try await WjxMultilevel.loadOptions(
+            parsedQuestions, html: html, url: normalizedUrl, client: client
+        )
         let title = WjxHtmlParser.extractSurveyTitle(fromHtml: html) ?? "问卷星问卷"
         return WjxParseResult(title: title, questions: questions)
     }
@@ -56,6 +59,8 @@ public enum WjxProvider {
         public var proxyAddress: String?
         /// 提交前惰性获取随机 IP（返回代理地址或 nil）
         public var submitProxyLeaseFactory: (() async throws -> String?)?
+        /// 停止信号（对标 brush_wjx_http 的 stop_signal）：准备阶段收到停止时不再 POST。
+        public var isStopRequested: (@Sendable () -> Bool)?
         public var rng: RandomSource
         public var now: () -> Date
 
@@ -66,6 +71,7 @@ public enum WjxProvider {
             userAgentProfile: UserAgentProfile? = nil,
             proxyAddress: String? = nil,
             submitProxyLeaseFactory: (() async throws -> String?)? = nil,
+            isStopRequested: (@Sendable () -> Bool)? = nil,
             rng: RandomSource = SystemRandomSource(),
             now: @escaping () -> Date = Date.init
         ) {
@@ -75,6 +81,7 @@ public enum WjxProvider {
             self.userAgentProfile = userAgentProfile
             self.proxyAddress = proxyAddress
             self.submitProxyLeaseFactory = submitProxyLeaseFactory
+            self.isStopRequested = isStopRequested
             self.rng = rng
             self.now = now
         }
@@ -162,6 +169,7 @@ public enum WjxProvider {
         if let factory = context.submitProxyLeaseFactory {
             submitProxyAddress = try await factory() ?? submitProxyAddress
         }
+        if context.isStopRequested?() == true { return false }
         if submitProxyAddress?.isEmpty == true { submitProxyAddress = nil }
         if config.randomProxyIpEnabled && submitProxyAddress == nil {
             throw SubmitProxyUnavailableError("提交前未获取到随机 IP")

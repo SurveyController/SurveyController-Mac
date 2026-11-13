@@ -24,10 +24,11 @@
 
 1. **原生 Mac 体验** - 纯 Swift + SwiftUI 构建，六步向导式流程，macOS 14+ 原生界面
 2. **多平台支持** - v0.1 起支持问卷星全链路，腾讯问卷、Credamo见数后续版本跟进
-3. **定制答案比例** - 自定义各选项权重与多选题命中概率分布，实时显示归一化比例
-4. **指定ip地区** - 省市级地区选择，支持随机IP或指定特定地区IP提交
-5. **配置导入导出** - 与 Windows 桌面版配置文件互通，跨设备同步
-6. **运行体验** - 并发槽位、暂停/继续、完成系统通知、日志按次存档、防休眠
+3. **问卷星新题型** - 对齐官方 v4.1.0，支持多级下拉题与隐藏空占位题过滤
+4. **定制答案比例** - 自定义各选项权重与多选题命中概率分布，实时显示归一化比例
+5. **指定ip地区** - 省市级地区选择，支持随机IP或指定特定地区IP提交
+6. **配置导入导出** - 与 Windows 桌面版配置文件互通，跨设备同步
+7. **运行体验** - 并发槽位、暂停/继续、完成系统通知、日志按次存档、防休眠
 
 ## 演示视频
 
@@ -57,7 +58,7 @@ open SurveyController.xcodeproj   # Xcode 中 Cmd+R 运行
 # 或命令行构建
 xcodebuild -project SurveyController.xcodeproj -scheme SurveyController build
 
-# 运行单元测试（86 个用例）
+# 运行单元测试（102 个用例）
 xcodebuild -project SurveyController.xcodeproj -scheme SurveyController test
 ```
 

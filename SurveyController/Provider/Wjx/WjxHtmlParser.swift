@@ -73,6 +73,16 @@ public enum WjxHtmlParser {
                 if typeCode != "11" && looksLikeReorder(questionDiv) {
                     typeCode = "11"
                 }
+                // 对标 _question_div_is_empty_gapfill_placeholder：隐藏且无输入框的填空占位节点直接跳过。
+                if isHiddenEmptyGapfillPlaceholder(questionDiv, typeCode: typeCode) {
+                    continue
+                }
+                // 对标 is_multilevel：type=1 且带「多级下拉」标记的输入框，按 type=7 处理。
+                let multilevelInput = try questionDiv.select("input[verify=\"多级下拉\"]").first()
+                let isMultilevel = typeCode == "1" && multilevelInput != nil
+                if isMultilevel {
+                    typeCode = "7"
+                }
                 let isDescription = looksLikeDescription(questionDiv, typeCode: typeCode)
                 let isRequired = questionIsRequired(questionDiv)
                 var isRating = false
@@ -137,7 +147,7 @@ public enum WjxHtmlParser {
                     (sliderMin, sliderMax, sliderStep) = extractSliderRange(questionDiv, questionNumber: questionNumber)
                 }
 
-                let textInputCount = countTextInputs(questionDiv)
+                let textInputCount = isMultilevel ? 0 : countTextInputs(questionDiv)
                 let textInputLabels = textInputCount > 1 ? extractTextInputLabels(questionDiv) : []
                 let hasGapfill = normalizeAttr(questionDiv.attrText("gapfill")) == "1"
                 let isTextLikeQuestion = shouldTreatAsTextLike(
@@ -160,6 +170,10 @@ public enum WjxHtmlParser {
                     "display_num": displayNum ?? NSNull(),
                     "title": titleText,
                     "type_code": typeCode,
+                    "provider_type": isMultilevel ? WjxMultilevel.providerType : typeCode,
+                    "provider_page_raw": isMultilevel
+                        ? ["cid": (try? multilevelInput?.attr("cid")) ?? ""]
+                        : NSNull(),
                     "options": optionCount,
                     "rows": metadata.matrixRows,
                     "row_texts": metadata.rowTexts,
@@ -427,6 +441,15 @@ public enum WjxHtmlParser {
             current = element.parent()
         }
         return false
+    }
+
+    /// 对标 _question_div_is_empty_gapfill_placeholder。
+    static func isHiddenEmptyGapfillPlaceholder(_ questionDiv: Element, typeCode: String) -> Bool {
+        guard typeCode == "9" else { return false }
+        guard normalizeAttr(questionDiv.attrText("gapfill")) == "1" else { return false }
+        guard ["", "0"].contains(normalizeAttr(questionDiv.attrText("relation"))) else { return false }
+        guard selfOrAncestorsHidden(questionDiv) else { return false }
+        return countTextInputs(questionDiv) == 0
     }
 
     static func hasQuestionAncestor(_ questionDiv: Element, until fieldset: Element) -> Bool {

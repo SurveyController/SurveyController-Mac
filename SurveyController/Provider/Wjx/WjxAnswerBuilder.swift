@@ -19,30 +19,33 @@ public enum WjxAnswerBuilder {
         let config = state.config
         let (entryType, configIndex) = configEntry
 
+        let action: AnswerAction?
         switch entryType {
         case "single":
-            return try buildSingleAction(question, configIndex, state: &state, rng: rng)
+            action = try buildSingleAction(question, configIndex, state: &state, rng: rng)
         case "multiple":
-            return try buildMultipleAction(question, configIndex, state: &state, rng: rng)
+            action = try buildMultipleAction(question, configIndex, state: &state, rng: rng)
         case "dropdown":
-            return try buildDropdownAction(question, configIndex, state: &state, rng: rng)
+            action = try buildDropdownAction(question, configIndex, state: &state, rng: rng)
         case "text", "multi_text":
-            return buildTextAction(question, configIndex, config: config, rng: rng)
+            action = buildTextAction(question, configIndex, config: config, rng: rng)
         case "location":
-            return nil
+            action = nil
         case "matrix":
-            return try buildMatrixAction(question, configIndex, config: config, rng: rng)
+            action = try buildMatrixAction(question, configIndex, config: config, rng: rng)
         case "scale":
-            return try buildScoreLikeAction(question, configIndex, config: config, answerType: "scale", rng: rng)
+            action = try buildScoreLikeAction(question, configIndex, config: config, answerType: "scale", rng: rng)
         case "score":
-            return try buildScoreLikeAction(question, configIndex, config: config, answerType: "score", rng: rng)
+            action = try buildScoreLikeAction(question, configIndex, config: config, answerType: "score", rng: rng)
         case "slider":
-            return buildSliderAction(question, configIndex, config: config)
+            action = buildSliderAction(question, configIndex, config: config)
         case "order":
-            return buildOrderAction(question, rng: rng)
+            action = buildOrderAction(question, rng: rng)
         default:
-            return nil
+            action = nil
         }
+        // 对标 multilevel_answer_action：多级下拉把选项索引换成文本路径。
+        return try action.map { try WjxMultilevel.applyAnswer($0, question: question) }
     }
 
     static func runtimeOptionTexts(_ question: SurveyQuestionMeta) -> [String] {
