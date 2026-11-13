@@ -136,8 +136,10 @@ public enum ExecutionConfigBuilder {
     }
 
     static func normalizedEntryType(_ entry: QuestionEntry) -> String {
-        // text / multi_text 由配置创建时写入 question_type（对标桌面端向导产物），此处不做推断
-        entry.questionType
+        // text / multi_text 由配置创建时写入 question_type（对标桌面端向导产物），此处不做推断。
+        // 多级下拉在桌面端是独立编辑器类型，运行时按下拉处理（对标 runtime_preparation）。
+        if entry.questionType == "multilevel_dropdown" { return "dropdown" }
+        return entry.questionType
     }
 
     static func asProbList(_ value: Any?) -> Any {

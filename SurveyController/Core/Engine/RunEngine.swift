@@ -271,6 +271,10 @@ public final class RunEngine: @unchecked Sendable {
                 rng: localRng
             )
             context.submitProxyLeaseFactory = leaseFactory
+            context.isStopRequested = { [weak self] in
+                guard let self else { return true }
+                return self.queue.sync { self.stopRequested }
+            }
 
             do {
                 let ok = try await submitHandler(config, context)
