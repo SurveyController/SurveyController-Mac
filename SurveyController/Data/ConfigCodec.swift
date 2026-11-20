@@ -44,7 +44,7 @@ public enum ConfigCodec {
         "provider_page_id", "ai_enabled", "multi_text_blank_modes", "multi_text_blank_ai_flags",
         "multi_text_blank_int_ranges", "text_random_mode", "text_random_int_range", "option_fill_texts",
         "fillable_option_indices", "attached_option_selects", "is_location", "location_parts",
-        "dimension", "psycho_bias",
+        "dimension", "psycho_bias", "question_id",
     ]
 
     static let runtimeConfigFields: Set<String> = [
@@ -570,6 +570,7 @@ let surveyQuestionMetaFields: Set<String> = [
     "controls_display_targets", "logic_parse_status", "question_media", "slider_min", "slider_max",
     "slider_step", "multi_min_limit", "multi_max_limit", "provider", "provider_question_id",
     "provider_page_id", "provider_type", "provider_page_raw", "unsupported", "unsupported_reason", "required",
+    "question_id",
 ]
 
 func nilIfNull(_ value: Any?) -> Any? {
