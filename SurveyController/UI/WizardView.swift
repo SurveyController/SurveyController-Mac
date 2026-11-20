@@ -308,7 +308,7 @@ struct NetworkStepView: View {
                         }
 
                         HStack(spacing: 10) {
-                            Button("领取试用") { Task { await model.activateTrial() } }
+                            Button("激活 / 领取") { Task { await model.activateTrial() } }
                                 .disabled(model.quotaLoading || model.isRunning)
                             TextField("卡密", text: $model.redeemCardCode)
                                 .textFieldStyle(.roundedBorder)

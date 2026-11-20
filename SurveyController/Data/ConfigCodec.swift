@@ -4,6 +4,8 @@
 import Foundation
 
 public let currentConfigSchemaVersion = 6
+/// 官方 v5 的配置版本号（字段名 schema_version）；v4.1.0 曾一度移除版本字段。
+public let desktopConfigSchemaVersion = 2
 public let configCorruptedMessage = "该配置文件损坏，请输入问卷链接/二维码重新配置"
 
 /// 对标 UserAgentProfile dataclass。
@@ -46,12 +48,12 @@ public enum ConfigCodec {
     ]
 
     static let runtimeConfigFields: Set<String> = [
-        "url", "survey_title", "survey_provider", "target", "threads", "submit_interval",
+        "schema_version", "config_schema_version", "url", "survey_title", "survey_provider", "target", "threads", "submit_interval",
         "answer_duration", "answer_datetime_window", "random_ip_enabled", "proxy_source",
         "custom_proxy_api", "proxy_area_code", "random_ua_enabled", "random_ua_ratios",
         "fail_stop_enabled", "pause_on_aliyun_captcha", "reliability_mode_enabled",
         "psycho_target_alpha", "ai_mode", "ai_provider", "ai_api_key", "ai_base_url",
-        "ai_api_protocol", "ai_model", "ai_system_prompt", "reverse_fill_enabled",
+        "ai_api_protocol", "ai_model", "ai_system_prompt", "ai_config_mode", "reverse_fill_enabled",
         "reverse_fill_source_path", "reverse_fill_format", "reverse_fill_start_row",
         "reverse_fill_threads", "answer_rules", "dimension_groups", "question_entries",
         "questions_info",
@@ -295,13 +297,21 @@ public enum ConfigCodec {
         let aiKeys: Set<String> = [
             "ai_mode", "ai_provider", "ai_api_key", "ai_base_url", "ai_api_protocol", "ai_model", "ai_system_prompt",
         ]
-        let hasAiKeys = !aiKeys.isDisjoint(with: raw.keys)
+        // v5 用 ai_config_mode 显式表达意图；v4 及更早版本靠“是否出现 ai_* 字段”推断
+        let aiConfigMode = JSONCoercion.asTrimmedString(raw["ai_config_mode"]).lowercased()
+        let hasAiKeys: Bool
+        switch aiConfigMode {
+        case "override": hasAiKeys = true
+        case "inherit": hasAiKeys = false
+        default: hasAiKeys = !aiKeys.isDisjoint(with: raw.keys)
+        }
         config.aiConfigPresent = hasAiKeys
+        config.aiConfigMode = hasAiKeys ? "override" : "inherit"
         if hasAiKeys {
             var aiMode = JSONCoercion.asTrimmedString(raw["ai_mode"]).lowercased()
-            if aiMode.isEmpty { aiMode = "free" }
-            config.aiMode = ["free", "provider"].contains(aiMode) ? aiMode : "free"
-            config.aiProvider = JSONCoercion.asString(raw["ai_provider"]).isEmpty ? "deepseek" : JSONCoercion.asString(raw["ai_provider"])
+            if aiMode.isEmpty { aiMode = "provider" }
+            config.aiMode = ["free", "provider"].contains(aiMode) ? aiMode : "provider"
+            config.aiProvider = JSONCoercion.asString(raw["ai_provider"]).isEmpty ? "custom" : JSONCoercion.asString(raw["ai_provider"])
             config.aiApiKey = JSONCoercion.asString(raw["ai_api_key"])
             config.aiBaseUrl = JSONCoercion.asString(raw["ai_base_url"])
             config.aiApiProtocol = JSONCoercion.asString(raw["ai_api_protocol"]).isEmpty ? "auto" : JSONCoercion.asString(raw["ai_api_protocol"])
@@ -353,6 +363,9 @@ public enum ConfigCodec {
     /// 对标 serialize_runtime_config。
     public static func serializeRuntimeConfig(_ config: RuntimeConfig) -> [String: Any] {
         [
+            // v5 用 schema_version，v4.0.x 用 config_schema_version；两个都写以双向兼容
+            "schema_version": desktopConfigSchemaVersion,
+            "config_schema_version": currentConfigSchemaVersion,
             "url": config.url,
             "survey_title": config.surveyTitle,
             "survey_provider": config.surveyProvider.rawValue,
@@ -373,6 +386,8 @@ public enum ConfigCodec {
             "psycho_target_alpha": config.psychoTargetAlpha,
             "ai_mode": config.aiMode,
             "ai_provider": config.aiProvider,
+            "ai_config_mode": config.aiConfigMode == "override" || config.aiConfigPresent
+                || !config.aiApiKey.isEmpty || !config.aiBaseUrl.isEmpty ? "override" : "inherit",
             "ai_api_key": config.aiApiKey,
             "ai_base_url": config.aiBaseUrl,
             "ai_api_protocol": config.aiApiProtocol,
@@ -394,9 +409,26 @@ public enum ConfigCodec {
         try normalizeRuntimeConfigPayload(payload)
     }
 
-    /// 对标 _ensure_supported_config_payload（当前为直通实现）。
-    public static func ensureSupportedConfigPayload(_ payload: [String: Any], configPath: String) -> [String: Any] {
-        payload
+    /// 对标 _ensure_supported_config_payload：只拒绝比当前支持版本更高的配置，
+    /// 没有版本字段（v4.1.0 导出）按兼容处理。
+    public static func ensureSupportedConfigPayload(_ payload: [String: Any], configPath: String) throws -> [String: Any] {
+        if let version = configVersion(payload["schema_version"]), version > desktopConfigSchemaVersion {
+            throw ConfigCodecError(
+                "配置文件来自更高版本的桌面端（schema v\(version)，当前最高支持 v\(desktopConfigSchemaVersion)）：\(configPath)"
+            )
+        }
+        if let version = configVersion(payload["config_schema_version"]), version > currentConfigSchemaVersion {
+            throw ConfigCodecError(
+                "配置文件版本不受支持（config_schema_version v\(version)，当前最高支持 v\(currentConfigSchemaVersion)）：\(configPath)"
+            )
+        }
+        return payload
+    }
+
+    static func configVersion(_ raw: Any?) -> Int? {
+        guard let raw, !(raw is NSNull) else { return nil }
+        if let number = raw as? NSNumber { return number.intValue }
+        return Int(JSONCoercion.asTrimmedString(raw))
     }
 
     // MARK: - 归一化辅助

@@ -410,11 +410,11 @@ public final class AppModel {
         quotaLoading = true
         defer { quotaLoading = false }
         do {
-            _ = try await BackendClient.shared.activateTrial()
+            let session = try await BackendClient.shared.ensureSession()
             await syncQuotaFromServer(silent: true)
-            showToast("随机IP试用领取成功")
+            showToast(session.isReady ? "随机IP账号已激活" : "账号已恢复，但未获得登录凭据，请重试")
         } catch {
-            showToast("试用领取失败：\(error.localizedDescription)")
+            showToast(error.localizedDescription)
         }
     }
 
@@ -581,7 +581,8 @@ public final class AppModel {
             return
         }
         do {
-            let config = try ConfigCodec.deserializeRuntimeConfig(payload)
+            let validated = try ConfigCodec.ensureSupportedConfigPayload(payload, configPath: path.lastPathComponent)
+            let config = try ConfigCodec.deserializeRuntimeConfig(validated)
             runtimeConfig = config
             surveyUrl = config.url
             surveyTitle = config.surveyTitle
@@ -611,7 +612,8 @@ public final class AppModel {
             guard let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
                 throw ConfigCodecError(configCorruptedMessage)
             }
-            let config = try ConfigCodec.deserializeRuntimeConfig(payload)
+            let validated = try ConfigCodec.ensureSupportedConfigPayload(payload, configPath: url.lastPathComponent)
+            let config = try ConfigCodec.deserializeRuntimeConfig(validated)
             runtimeConfig = config
             surveyUrl = config.url
             surveyTitle = config.surveyTitle
