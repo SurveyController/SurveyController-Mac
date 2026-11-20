@@ -2,6 +2,7 @@
 // 题目元数据的统一契约：解析器产出、配置存储、答案生成共同使用的领域模型。
 
 import Foundation
+import CryptoKit
 
 public let logicParseStatusComplete = "complete"
 public let logicParseStatusNone = "none"
@@ -59,6 +60,8 @@ public struct SurveyQuestionMeta: @unchecked Sendable, Identifiable {
     public var unsupported: Bool
     public var unsupportedReason: String
     public var required: Bool
+    /// 稳定题目 ID（官方 v5 引入）：provider:page:id，缺失时用 provider:local:<sha1> 兜底。
+    public var questionId: String
 
     public init(
         num: Int = 1,
@@ -106,7 +109,8 @@ public struct SurveyQuestionMeta: @unchecked Sendable, Identifiable {
         providerPageRaw: Any? = nil,
         unsupported: Bool = false,
         unsupportedReason: String = "",
-        required: Bool = false
+        required: Bool = false,
+        questionId: String = ""
     ) {
         self.num = num
         self.title = title
@@ -154,6 +158,7 @@ public struct SurveyQuestionMeta: @unchecked Sendable, Identifiable {
         self.unsupported = unsupported
         self.unsupportedReason = unsupportedReason
         self.required = required
+        self.questionId = questionId
     }
 }
 
@@ -278,7 +283,27 @@ public func surveyQuestionMetaToDict(_ question: SurveyQuestionMeta) -> [String:
         "unsupported": question.unsupported,
         "unsupported_reason": question.unsupportedReason,
         "required": question.required,
+        "question_id": question.questionId.isEmpty ? stableQuestionId(question) : question.questionId,
     ]
+}
+
+/// 稳定题目 ID，对齐官方 v5 `run_plan.question_id()`：
+/// 有平台原生题号时用 `provider:page:id`，否则用 `provider:local:<sha1 前 12 位>`。
+public func stableQuestionId(_ question: SurveyQuestionMeta) -> String {
+    let provider = question.provider.rawValue.lowercased()
+    let providerId = question.providerQuestionId.trimmingCharacters(in: .whitespacesAndNewlines)
+    let pageId = question.providerPageId.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !providerId.isEmpty {
+        return pageId.isEmpty ? "\(provider):\(providerId)" : "\(provider):\(pageId):\(providerId)"
+    }
+    let raw = [provider, pageId, String(question.num), question.title.trimmingCharacters(in: .whitespacesAndNewlines)]
+        .joined(separator: "|")
+    return "\(provider):local:\(sha1Prefix12(raw))"
+}
+
+private func sha1Prefix12(_ text: String) -> String {
+    let digest = Insecure.SHA1.hash(data: Data(text.utf8))
+    return digest.map { String(format: "%02x", $0) }.joined().prefix(12).description
 }
 
 /// 对标 contracts.py 里的各 _normalize_* 辅助函数。
@@ -517,7 +542,8 @@ func normalizeSurveyQuestion(_ question: [String: Any], provider: SurveyProvider
         providerPageRaw: rawIsNil(rawProviderPageRaw) ? nil : rawProviderPageRaw,
         unsupported: unsupported,
         unsupportedReason: unsupportedReason,
-        required: JSONCoercion.asBool(question["required"])
+        required: JSONCoercion.asBool(question["required"]),
+        questionId: JSONCoercion.asTrimmedString(question["question_id"])
     )
 }
 

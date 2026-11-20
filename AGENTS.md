@@ -8,7 +8,7 @@
 - **项目性质**：SurveyController 官方 Windows 桌面端的 **macOS 端独立移植版**
 - **GitHub 仓库**：https://github.com/SurveyController/SurveyController-Mac
 - **License**：GPL-3.0（与官方一致）
-- **当前版本**：v0.2.0（开发中，逐步对齐官方 v4.1.0）
+- **当前版本**：v1.0.0（对齐官方 v5.0.1）
 
 ## 官方源仓库
 

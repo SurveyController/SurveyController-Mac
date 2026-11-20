@@ -34,8 +34,8 @@ public struct RuntimeConfig: @unchecked Sendable {
     public var pauseOnAliyunCaptcha: Bool = true
     public var reliabilityModeEnabled: Bool = true
     public var psychoTargetAlpha: Double = 0.85
-    public var aiMode: String = "free"
-    public var aiProvider: String = "deepseek"
+    public var aiMode: String = "provider"
+    public var aiProvider: String = "custom"
     public var aiApiKey: String = ""
     public var aiBaseUrl: String = ""
     public var aiApiProtocol: String = "auto"
@@ -52,6 +52,8 @@ public struct RuntimeConfig: @unchecked Sendable {
     public var questionsInfo: [SurveyQuestionMeta] = []
     /// 配置文件里是否显式出现 AI 字段（对标 _ai_config_present，不入序列化）。
     public var aiConfigPresent: Bool = false
+    /// 配置意图：inherit（沿用全局设置）/ override（自带 AI 配置），对齐官方 v5 ai_config_mode。
+    public var aiConfigMode: String = "inherit"
 
     public init() {}
 }

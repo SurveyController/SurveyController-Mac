@@ -23,7 +23,9 @@ final class ConfigCodecTests: XCTestCase {
         let payload = ConfigCodec.serializeRuntimeConfig(config)
         let restored = try ConfigCodec.deserializeRuntimeConfig(payload)
 
-        XCTAssertNil(payload["config_schema_version"])
+        // v5 对齐：导出同时写桌面端 schema_version 与历史 config_schema_version
+        XCTAssertEqual(payload["schema_version"] as? Int, 2)
+        XCTAssertEqual(payload["config_schema_version"] as? Int, currentConfigSchemaVersion)
         XCTAssertTrue(restored.reverseFillEnabled)
         XCTAssertEqual(restored.reverseFillSourcePath, "/Users/demo/Downloads/demo.xlsx")
         XCTAssertEqual(restored.reverseFillFormat, reverseFillFormatWjxSequence)
@@ -218,7 +220,7 @@ final class ConfigCodecTests: XCTestCase {
         XCTAssertEqual(cfg.reverseFillStartRow, 1)
         XCTAssertEqual(cfg.reverseFillThreads, 1)
         XCTAssertEqual(cfg.dimensionGroups, ["服务"])
-        XCTAssertEqual(cfg.aiMode, "free")
+        XCTAssertEqual(cfg.aiMode, "provider")
         XCTAssertEqual(cfg.questionsInfo.count, 0)
         XCTAssertEqual(cfg.questionEntries.count, 1)
         XCTAssertEqual(cfg.questionEntries[0].rows, 1)
@@ -329,5 +331,80 @@ final class ConfigCodecTests: XCTestCase {
         XCTAssertEqual(normalizeTargetAlpha(0.1), 0.60)
         XCTAssertEqual(normalizeTargetAlpha(nil), 0.85)
         XCTAssertEqual(normalizeTargetAlpha("0.9"), 0.9)
+    }
+
+    // MARK: - 官方 v5.0.1 配置协议对齐
+
+    func test_serialize_writes_desktop_schema_version_and_ai_config_mode() {
+        var config = RuntimeConfig()
+        config.aiApiKey = "sk-x"
+        let payload = ConfigCodec.serializeRuntimeConfig(config)
+
+        XCTAssertEqual(payload["schema_version"] as? Int, desktopConfigSchemaVersion)
+        XCTAssertEqual(payload["config_schema_version"] as? Int, currentConfigSchemaVersion)
+        XCTAssertEqual(payload["ai_config_mode"] as? String, "override")
+
+        let plain = ConfigCodec.serializeRuntimeConfig(RuntimeConfig())
+        XCTAssertEqual(plain["ai_config_mode"] as? String, "inherit")
+        XCTAssertEqual(plain["ai_mode"] as? String, "provider")
+        XCTAssertEqual(plain["ai_provider"] as? String, "custom")
+    }
+
+    func test_deserialize_accepts_v5_payload_without_legacy_version_key() throws {
+        let payload: [String: Any] = [
+            "schema_version": 2,
+            "url": "https://www.wjx.cn/vm/abc.aspx",
+            "survey_title": "v5 配置",
+            "ai_config_mode": "override",
+            "ai_provider": "custom",
+            "ai_api_key": "sk-x",
+        ]
+
+        let config = try ConfigCodec.deserializeRuntimeConfig(payload)
+
+        XCTAssertEqual(config.surveyTitle, "v5 配置")
+        XCTAssertTrue(config.aiConfigPresent)
+        XCTAssertEqual(config.aiProvider, "custom")
+        XCTAssertEqual(config.aiConfigMode, "override")
+    }
+
+    func test_deserialize_honors_inherit_even_when_ai_fields_present() throws {
+        let payload: [String: Any] = [
+            "schema_version": 2,
+            "url": "https://www.wjx.cn/vm/abc.aspx",
+            "ai_config_mode": "inherit",
+            "ai_api_key": "sk-should-be-ignored",
+        ]
+
+        let config = try ConfigCodec.deserializeRuntimeConfig(payload)
+
+        XCTAssertFalse(config.aiConfigPresent)
+        XCTAssertEqual(config.aiConfigMode, "inherit")
+    }
+
+    func test_ensure_supported_config_payload_rejects_future_versions() {
+        XCTAssertThrowsError(
+            try ConfigCodec.ensureSupportedConfigPayload(["schema_version": 3], configPath: "a.json")
+        )
+        XCTAssertThrowsError(
+            try ConfigCodec.ensureSupportedConfigPayload(["config_schema_version": 7], configPath: "a.json")
+        )
+        XCTAssertNoThrow(
+            try ConfigCodec.ensureSupportedConfigPayload(["schema_version": 1], configPath: "a.json")
+        )
+        // v4.1.0 导出没有版本字段
+        XCTAssertNoThrow(try ConfigCodec.ensureSupportedConfigPayload([:], configPath: "a.json"))
+    }
+
+    func test_stable_question_id_prefers_provider_ids() {
+        var question = SurveyQuestionMeta(num: 3, title: "题目标题")
+        question.provider = .wjx
+        question.providerQuestionId = "5"
+        question.providerPageId = "2"
+        XCTAssertEqual(stableQuestionId(question), "wjx:2:5")
+
+        question.providerQuestionId = ""
+        XCTAssertTrue(stableQuestionId(question).hasPrefix("wjx:local:"))
+        XCTAssertEqual(stableQuestionId(question).count, "wjx:local:".count + 12)
     }
 }
