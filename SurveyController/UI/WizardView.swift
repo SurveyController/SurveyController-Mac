@@ -85,22 +85,22 @@ struct WizardView: View {
                     Button {
                         Task { await model.startRun() }
                     } label: {
-                        Label("开始执行", systemImage: "play.fill")
+                        Label("开始执行", systemImage: "play.fill").studioActionLabel()
                     }
                     .controlSize(.large)
                     .buttonStyle(.borderedProminent)
-                    .tint(StudioStyle.primaryButton)
+                    .tint(StudioStyle.accent)
                     .disabled(!model.canStart || !model.preflight.errors.isEmpty)
                 }
             } else if model.wizardStep != .survey {
                 Button {
                     model.nextStep()
                 } label: {
-                    Label(model.wizardStep == .check ? "进入运行" : "下一步", systemImage: "chevron.right")
+                    Label(model.wizardStep == .check ? "进入运行" : "下一步", systemImage: "chevron.right").studioActionLabel()
                 }
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
-                .tint(StudioStyle.primaryButton)
+                .tint(StudioStyle.accent)
             }
         }
         .padding(.horizontal, 24)
@@ -164,14 +164,14 @@ struct SurveyStepView: View {
                         .accessibilityAddTraits(.isHeader)
                     Text("输入问卷链接，解析题目后即可编辑和离线试跑。")
                         .font(.subheadline)
-                        .foregroundStyle(StudioStyle.mutedOnPanel)
+                        .foregroundStyle(StudioStyle.muted)
                 }
                 Spacer()
                 Image(systemName: "list.bullet.clipboard")
                     .font(.system(size: 31, weight: .medium))
-                    .foregroundStyle(StudioStyle.accent)
+                    .foregroundStyle(StudioStyle.badgeInk)
                     .frame(width: 59, height: 59)
-                    .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 19))
+                    .background(StudioStyle.badge, in: RoundedRectangle(cornerRadius: 19))
                     .accessibilityHidden(true)
             }
             HStack(spacing: 9) {
@@ -210,14 +210,14 @@ struct SurveyStepView: View {
                     .foregroundStyle(canParse ? StudioStyle.onPrimaryButton : StudioStyle.muted)
                     .padding(.horizontal, 13)
                     .frame(height: 43)
-                    .background(canParse ? StudioStyle.primaryButton : StudioStyle.raised, in: RoundedRectangle(cornerRadius: 12))
+                    .background(canParse ? StudioStyle.accent : StudioStyle.disabledButton, in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
                 .disabled(!canParse)
             }
             Label("问卷星 · 腾讯问卷 · Credamo 见数", systemImage: "link")
                 .font(.caption.weight(.medium))
-                .foregroundStyle(StudioStyle.mutedOnPanel)
+                .foregroundStyle(StudioStyle.muted)
         }
         .foregroundStyle(StudioStyle.ink)
         .padding(27)
@@ -236,15 +236,19 @@ struct SurveyStepView: View {
                 Text(model.surveyTitle.isEmpty ? "已解析问卷" : model.surveyTitle)
                     .font(.subheadline.weight(.semibold)).lineLimit(2)
                 Text("\(model.runtimeConfig.questionsInfo.count) 题 · \(model.providerLabel)")
-                    .font(.caption).foregroundStyle(StudioStyle.mutedOnPanel)
+                    .font(.caption).foregroundStyle(StudioStyle.muted)
             }
             Spacer()
             if let url = URL(string: model.surveyUrl), url.scheme != nil {
                 Link("查看问卷", destination: url)
             }
-            Button("继续编辑") { model.goToStep(.answers) }
-                .buttonStyle(.borderedProminent)
-                .tint(StudioStyle.primaryButton)
+            Button {
+                model.goToStep(.answers)
+            } label: {
+                Text("继续编辑").studioActionLabel()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(StudioStyle.accent)
         }
         .padding(16)
         .studioPanel()
@@ -255,12 +259,12 @@ struct SurveyStepView: View {
             HStack(spacing: 11) {
                 Image(systemName: icon)
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(StudioStyle.accent)
+                    .foregroundStyle(StudioStyle.badgeInk)
                     .frame(width: 42, height: 42)
-                    .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 12))
+                    .background(StudioStyle.badge, in: RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.subheadline.weight(.semibold))
-                    Text(detail).font(.caption).foregroundStyle(StudioStyle.mutedOnPanel)
+                    Text(detail).font(.caption).foregroundStyle(StudioStyle.muted)
                 }
                 Spacer(minLength: 3)
                 Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(StudioStyle.accent)
@@ -456,7 +460,7 @@ struct NetworkStepView: View {
                             } else if model.quotaKnown {
                                 Text("剩余额度 \(model.quotaRemaining, format: .number)")
                                     .monospacedDigit()
-                                    .foregroundStyle(model.quotaRemaining > 0 ? StudioStyle.success : StudioStyle.dangerOnPanel)
+                                    .foregroundStyle(model.quotaRemaining > 0 ? StudioStyle.success : StudioStyle.danger)
                             }
                         }
 
@@ -606,14 +610,14 @@ struct CheckStepView: View {
                 HStack(spacing: 13) {
                     Image(systemName: "checklist")
                         .font(.system(size: 25, weight: .semibold))
-                        .foregroundStyle(StudioStyle.accent)
+                        .foregroundStyle(StudioStyle.badgeInk)
                         .frame(width: 48, height: 48)
-                        .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 14))
+                        .background(StudioStyle.badge, in: RoundedRectangle(cornerRadius: 14))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("离线试跑").font(.headline)
                         Text("在本机预览最多 20 份答案和选项分布。")
-                            .font(.subheadline).foregroundStyle(StudioStyle.mutedOnPanel)
+                            .font(.subheadline).foregroundStyle(StudioStyle.muted)
                     }
                     Spacer()
                     Button {
@@ -624,7 +628,7 @@ struct CheckStepView: View {
                             .padding(.vertical, 9)
                             .padding(.horizontal, 12)
                             .foregroundStyle(model.canStart ? StudioStyle.onPrimaryButton : StudioStyle.muted)
-                            .background(model.canStart ? StudioStyle.primaryButton : StudioStyle.raised, in: RoundedRectangle(cornerRadius: 10))
+                            .background(model.canStart ? StudioStyle.accent : StudioStyle.disabledButton, in: RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
                     .disabled(!model.canStart)
@@ -655,7 +659,7 @@ struct CheckStepView: View {
                                     .buttonStyle(.link)
                                 } else {
                                     Label(line, systemImage: "xmark.octagon.fill")
-                                        .foregroundStyle(StudioStyle.dangerOnPanel)
+                                        .foregroundStyle(StudioStyle.danger)
                                 }
                             }
                         }
@@ -734,7 +738,7 @@ struct RunStepView: View {
                 StudioMetric(title: "成功", value: String(model.progress.successCount), icon: "checkmark.circle",
                              color: StudioStyle.success)
                 StudioMetric(title: "失败", value: String(model.progress.failCount), icon: "xmark.circle",
-                             color: model.progress.failCount > 0 ? StudioStyle.dangerOnPanel : StudioStyle.ink)
+                             color: model.progress.failCount > 0 ? StudioStyle.danger : StudioStyle.ink)
                 StudioMetric(title: "剩余", value: String(max(0, model.progress.target - model.progress.successCount)),
                              icon: "hourglass", color: StudioStyle.ink)
             }
@@ -759,7 +763,7 @@ struct RunStepView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(slot.status).font(.caption.weight(.semibold))
                                 Text("\(slot.success) 成功 · \(slot.fail) 失败")
-                                    .font(.caption2.monospacedDigit()).foregroundStyle(StudioStyle.mutedOnPanel)
+                                    .font(.caption2.monospacedDigit()).foregroundStyle(StudioStyle.muted)
                             }
                             .padding(8)
                             .studioPanel(radius: 9)

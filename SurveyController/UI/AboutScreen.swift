@@ -58,10 +58,14 @@ struct AboutScreen: View {
                     .disabled(model.updateState == .checking)
 
                     if case .outdated(_, let url) = model.updateState {
-                        Button("前往下载") { model.openReleasePage(url) }
-                            .controlSize(.small)
-                            .buttonStyle(.borderedProminent)
-                            .tint(StudioStyle.primaryButton)
+                        Button {
+                            model.openReleasePage(url)
+                        } label: {
+                            Text("前往下载").studioActionLabel()
+                        }
+                        .controlSize(.small)
+                        .buttonStyle(.borderedProminent)
+                        .tint(StudioStyle.accent)
                     }
                 }
             }

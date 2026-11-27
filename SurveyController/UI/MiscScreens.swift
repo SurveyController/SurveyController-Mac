@@ -19,7 +19,7 @@ struct LogsScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 9) {
                     if embedded { Text("运行日志").font(.headline) }
-                    Text("\(lines.count) 行").font(.caption.monospacedDigit()).foregroundStyle(StudioStyle.mutedOnPanel)
+                    Text("\(lines.count) 行").font(.caption.monospacedDigit()).foregroundStyle(StudioStyle.muted)
                     Spacer()
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass").foregroundStyle(StudioStyle.muted)
@@ -137,9 +137,13 @@ struct SettingsScreen: View {
                         }
                     }
                     HStack {
-                        Text("密钥存入 macOS 钥匙串。").font(.caption).foregroundStyle(StudioStyle.mutedOnPanel)
+                        Text("密钥存入 macOS 钥匙串。").font(.caption).foregroundStyle(StudioStyle.muted)
                         Spacer()
-                        Button("保存 AI 设置", action: model.saveAISettings).buttonStyle(.borderedProminent).tint(StudioStyle.primaryButton)
+                        Button(action: model.saveAISettings) {
+                            Text("保存 AI 设置").studioActionLabel()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(StudioStyle.accent)
                     }
                 }
 
@@ -147,7 +151,7 @@ struct SettingsScreen: View {
                     HStack {
                         Text(AppModel.configDirectory.path)
                             .font(.caption.monospaced())
-                            .foregroundStyle(StudioStyle.mutedOnPanel)
+                            .foregroundStyle(StudioStyle.muted)
                             .textSelection(.enabled)
                         Spacer()
                         Button("在 Finder 中打开") { NSWorkspace.shared.open(AppModel.configDirectory) }
@@ -157,7 +161,7 @@ struct SettingsScreen: View {
                 CardView(title: "运行日志存档") {
                     HStack {
                         Text("每次运行自动存档，保留最近 10 份")
-                            .font(.caption).foregroundStyle(StudioStyle.mutedOnPanel)
+                            .font(.caption).foregroundStyle(StudioStyle.muted)
                         Spacer()
                         Button("打开日志目录") { NSWorkspace.shared.open(AppModel.logsDirectory) }
                     }

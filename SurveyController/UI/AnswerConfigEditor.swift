@@ -36,7 +36,7 @@ struct AnswerConfigEditor: View {
                 Text("题目").font(.headline)
                 Spacer()
                 Text("\(entries.count)/\(questions.count)").font(.caption.monospacedDigit())
-                    .foregroundStyle(StudioStyle.mutedOnPanel)
+                    .foregroundStyle(StudioStyle.muted)
             }
             HStack(spacing: 7) {
                 Image(systemName: "magnifyingglass").foregroundStyle(StudioStyle.muted)
@@ -71,9 +71,9 @@ struct AnswerConfigEditor: View {
                             HStack(spacing: 8) {
                                 Text("\(question.displayNum ?? question.num)")
                                     .font(.caption.weight(.semibold).monospacedDigit())
-                                    .foregroundStyle(StudioStyle.accent)
+                                    .foregroundStyle(StudioStyle.badgeInk)
                                     .frame(minWidth: 25, minHeight: 25)
-                                    .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 7))
+                                    .background(StudioStyle.badge, in: RoundedRectangle(cornerRadius: 7))
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(question.title.isEmpty ? "未命名题目" : question.title)
                                         .font(.subheadline.weight(.medium))

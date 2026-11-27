@@ -142,8 +142,8 @@ struct MainWindow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(StudioStyle.panel, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(toastColor.opacity(0.35)))
+        .background(StudioStyle.popup, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(StudioStyle.border))
         .shadow(radius: 6)
         .padding(.bottom, 18)
         .transition(.move(edge: .bottom).combined(with: .opacity))
