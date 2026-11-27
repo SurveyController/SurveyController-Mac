@@ -21,8 +21,15 @@ public final class AppModel {
     // MARK: - 问卷状态
 
     public var surveyUrl: String = "" {
-        didSet { runtimeConfig.url = surveyUrl }
+        didSet {
+            guard surveyUrl != oldValue else { return }
+            runtimeConfig.url = surveyUrl
+            parseGeneration += 1
+            parsePhase = .idle
+            parseError = ""
+        }
     }
+    private var parseGeneration = 0
     public var parsePhase: SurveyParsePhase = .idle
     public var parseError: String = ""
     public var surveyTitle: String = ""
@@ -195,7 +202,10 @@ public final class AppModel {
     // MARK: - 解析
 
     public func parseSurvey() async {
-        let url = surveyUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        let url = ProviderType.normalizeSurveyParseUrl(surveyUrl)
+        surveyUrl = url
+        parseGeneration += 1
+        let generation = parseGeneration
         guard !url.isEmpty else {
             parseError = "请先输入问卷链接"
             parsePhase = .failed
@@ -216,6 +226,7 @@ public final class AppModel {
                 return
             }
             let result = try await WjxProvider.parseSurvey(url: url)
+            guard generation == parseGeneration else { return }
             surveyProvider = provider
             surveyTitle = result.title
             runtimeConfig.surveyProvider = provider
@@ -232,6 +243,7 @@ public final class AppModel {
             appendLog("解析成功：\(result.title)（\(result.questions.count) 题）")
             goToStep(.answers)
         } catch {
+            guard generation == parseGeneration else { return }
             parseError = error.localizedDescription
             parsePhase = .failed
             appendLog("解析失败：\(error.localizedDescription)")
@@ -317,22 +329,27 @@ public final class AppModel {
 
     public func startRun() async {
         guard canStart else { return }
+        let snapshot: RuntimeConfig
+        do {
+            snapshot = try ConfigCodec.compileRunSnapshot(runtimeConfig)
+        } catch {
+            showToast(error.localizedDescription)
+            return
+        }
         isRunning = true
         logs.removeAll()
         goToStep(.run)
 
-        let snapshot = ConfigCodec.buildRuntimeConfigSnapshot(runtimeConfig)
         let execution = ExecutionConfigBuilder.build(from: snapshot)
 
         var pool: ProxyPool? = nil
         if execution.randomProxyIpEnabled {
             switch execution.proxySource {
             case proxySourceCustom:
-                pool = ProxyPool(provider: CustomProxyProvider(apiUrl: execution.customProxyApi))
+                pool = ProxyPool(provider: CustomProxyProvider(apiUrl: execution.customProxyApi), areaCode: execution.proxyAreaCode)
             default:
-                pool = ProxyPool(provider: OfficialProxyProvider())
+                pool = ProxyPool(provider: OfficialProxyProvider(), areaCode: execution.proxyAreaCode)
             }
-            await pool?.setAreaCode(execution.proxyAreaCode)
         }
 
         beginSleepAssertion()
@@ -342,7 +359,8 @@ public final class AppModel {
         engineTask = Task { [weak self] in
             guard let self else { return }
             for await event in engine.progressStream {
-                await self.handleEngineEvent(event)
+                self.handleEngineEvent(event)
+                if case .finished = event { break }
             }
         }
         appendLog(runtimeConfig.randomIpEnabled ? "随机IP已启用（来源：\(runtimeConfig.proxySource)）" : "本次直连提交")
@@ -619,6 +637,7 @@ public final class AppModel {
             surveyTitle = config.surveyTitle
             surveyProvider = config.surveyProvider
             parsePhase = config.questionsInfo.isEmpty ? .idle : .ready
+            parseGeneration += 1
             Self.lastConfigPath = url
             appendLog("配置已导入：\(url.lastPathComponent)")
         } catch {

@@ -122,6 +122,7 @@ public enum ConfigCodec {
             "survey_provider": entry.surveyProvider.rawValue,
             "provider_question_id": entry.providerQuestionId ?? "",
             "provider_page_id": entry.providerPageId ?? "",
+            "question_id": entry.questionId,
             "ai_enabled": entry.aiEnabled,
             "multi_text_blank_modes": normalizeMultiTextBlankModes(entry.multiTextBlankModes),
             "multi_text_blank_ai_flags": entry.multiTextBlankAiFlags,
@@ -177,6 +178,7 @@ public enum ConfigCodec {
             surveyProvider: ProviderType.normalizeProvider(JSONCoercion.asString(data["survey_provider"]), default: .wjx),
             providerQuestionId: providerQuestionId.isEmpty ? nil : providerQuestionId,
             providerPageId: providerPageId.isEmpty ? nil : providerPageId,
+            questionId: JSONCoercion.asTrimmedString(data["question_id"]),
             aiEnabled: JSONCoercion.asBool(data["ai_enabled"], default: false),
             multiTextBlankModes: normalizeMultiTextBlankModes(data["multi_text_blank_modes"]),
             multiTextBlankAiFlags: normalizeMultiTextBlankAiFlags(data["multi_text_blank_ai_flags"]),
@@ -222,6 +224,7 @@ public enum ConfigCodec {
             default: ProviderType.detectProvider(config.url)
         )
         snapshot.surveyProvider = defaultProvider
+        snapshot.url = ProviderType.normalizeSurveyParseUrl(config.url)
         let entrySource = questionEntries ?? config.questionEntries
         let infoSource = questionsInfo ?? config.questionsInfo
         snapshot.questionEntries = cloneQuestionEntries(entrySource)
@@ -243,7 +246,7 @@ public enum ConfigCodec {
             )
         }
 
-        config.url = JSONCoercion.asString(raw["url"])
+        config.url = ProviderType.normalizeSurveyParseUrl(JSONCoercion.asString(raw["url"]))
         config.surveyTitle = JSONCoercion.asString(raw["survey_title"])
         config.surveyProvider = ProviderType.normalizeProvider(
             JSONCoercion.asString(raw["survey_provider"]),
@@ -357,16 +360,17 @@ public enum ConfigCodec {
 
         let (sanitized, _) = sanitizeAnswerRules(config.answerRules, questionsInfo: config.questionsInfo)
         config.answerRules = sanitized
-        return config
+        return populateQuestionIds(in: config)
     }
 
     /// 对标 serialize_runtime_config。
-    public static func serializeRuntimeConfig(_ config: RuntimeConfig) -> [String: Any] {
-        [
+    public static func serializeRuntimeConfig(_ source: RuntimeConfig) -> [String: Any] {
+        let config = populateQuestionIds(in: source)
+        return [
             // v5 用 schema_version，v4.0.x 用 config_schema_version；两个都写以双向兼容
             "schema_version": desktopConfigSchemaVersion,
             "config_schema_version": currentConfigSchemaVersion,
-            "url": config.url,
+            "url": ProviderType.normalizeSurveyParseUrl(config.url),
             "survey_title": config.surveyTitle,
             "survey_provider": config.surveyProvider.rawValue,
             "target": config.target,
@@ -403,6 +407,44 @@ public enum ConfigCodec {
             "question_entries": config.questionEntries.map(serializeQuestionEntry),
             "questions_info": serializeSurveyQuestionMetas(config.questionsInfo),
         ]
+    }
+
+    static func populateQuestionIds(in config: RuntimeConfig) -> RuntimeConfig {
+        var result = config
+        result.questionsInfo = config.questionsInfo.map { question in
+            var meta = question
+            let existing = meta.questionId.trimmingCharacters(in: .whitespacesAndNewlines)
+            meta.questionId = existing.isEmpty ? stableQuestionId(meta) : existing
+            return meta
+        }
+        result.questionEntries = config.questionEntries.enumerated().map { index, source in
+            var entry = source
+            entry.questionId = entry.questionId.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard entry.questionId.isEmpty else { return entry }
+
+            let meta = result.questionsInfo.first { $0.num == entry.questionNum }
+                ?? (result.questionsInfo.indices.contains(index) ? result.questionsInfo[index] : nil)
+            entry.questionId = meta?.questionId ?? stableQuestionId(
+                SurveyQuestionMeta(
+                    num: entry.questionNum ?? 0,
+                    title: entry.questionTitle ?? "",
+                    provider: entry.surveyProvider,
+                    providerQuestionId: entry.providerQuestionId ?? "",
+                    providerPageId: entry.providerPageId ?? ""
+                )
+            )
+            return entry
+        }
+        return result
+    }
+
+    static func compileRunSnapshot(_ config: RuntimeConfig) throws -> RuntimeConfig {
+        let snapshot = populateQuestionIds(in: buildRuntimeConfigSnapshot(config))
+        let ids = snapshot.questionEntries.map(\.questionId)
+        guard ids.count == Set(ids).count else {
+            throw ConfigCodecError("运行计划包含重复的题目 ID")
+        }
+        return snapshot
     }
 
     public static func deserializeRuntimeConfig(_ payload: [String: Any]) throws -> RuntimeConfig {

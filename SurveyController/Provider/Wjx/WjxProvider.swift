@@ -182,13 +182,25 @@ public enum WjxProvider {
         submitHeaders["Origin"] = "https://\(domain)"
         submitHeaders["X-Requested-With"] = "XMLHttpRequest"
 
-        let response = try await client.postForm(
-            submitUrl,
-            query: params,
-            formData: ["submitdata": submitdata, "sceneId": sceneId],
-            headers: submitHeaders,
-            proxyAddress: submitProxyAddress
-        )
+        let response: HTTPResponse
+        do {
+            response = try await client.postForm(
+                submitUrl,
+                query: params,
+                formData: ["submitdata": submitdata, "sceneId": sceneId],
+                headers: submitHeaders,
+                proxyAddress: submitProxyAddress,
+                followRedirects: false
+            )
+        } catch TransportError.network(let detail) {
+            throw SubmissionResultUnknownError(detail: detail)
+        }
+        if response.statusCode == 407 {
+            throw TransportError.proxyConnection("代理要求身份验证")
+        }
+        if (300..<400).contains(response.statusCode) {
+            throw SurveyProviderUnavailableAtRuntimeError("问卷星提交请求收到重定向，已停止本轮")
+        }
         try response.raiseForStatus()
 
         let responseText = response.text.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -396,6 +396,36 @@ final class ConfigCodecTests: XCTestCase {
         XCTAssertNoThrow(try ConfigCodec.ensureSupportedConfigPayload([:], configPath: "a.json"))
     }
 
+    func test_run_snapshot_normalizes_url_and_preserves_stored_and_generated_ids() throws {
+        var config = RuntimeConfig()
+        config.url = " WWW.WJX.CN/vm/demo.aspx "
+        config.questionsInfo = [
+            SurveyQuestionMeta(num: 1, providerQuestionId: "a"),
+            SurveyQuestionMeta(num: 2, providerQuestionId: "b"),
+        ]
+        config.questionEntries = [
+            QuestionEntry(questionNum: 2),
+            QuestionEntry(questionNum: 1, questionId: "imported-id"),
+        ]
+        let snapshot = try ConfigCodec.compileRunSnapshot(config)
+        XCTAssertEqual(snapshot.url, "https://www.wjx.cn/vm/demo.aspx")
+        XCTAssertEqual(snapshot.questionEntries.map(\.questionId), ["wjx:b", "imported-id"])
+
+        let restored = try ConfigCodec.deserializeRuntimeConfig(ConfigCodec.serializeRuntimeConfig(snapshot))
+        XCTAssertEqual(restored.questionEntries.map(\.questionId), ["wjx:b", "imported-id"])
+        XCTAssertEqual(restored.questionsInfo.map(\.questionId), ["wjx:a", "wjx:b"])
+        XCTAssertEqual(config.questionEntries[0].questionId, "")
+    }
+
+    func test_run_snapshot_rejects_duplicate_question_ids() {
+        var config = RuntimeConfig()
+        config.questionEntries = [
+            QuestionEntry(questionNum: 1, questionId: "same"),
+            QuestionEntry(questionNum: 2, questionId: "same"),
+        ]
+        XCTAssertThrowsError(try ConfigCodec.compileRunSnapshot(config))
+    }
+
     func test_stable_question_id_prefers_provider_ids() {
         var question = SurveyQuestionMeta(num: 3, title: "题目标题")
         question.provider = .wjx

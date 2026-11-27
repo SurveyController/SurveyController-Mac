@@ -23,6 +23,14 @@ public final class SubmissionVerificationRequiredError: Error, LocalizedError, @
 }
 
 /// 随机 IP 提交代理解不可用。
+public struct SubmissionResultUnknownError: Error, LocalizedError, Sendable {
+    public let detail: String
+
+    public var errorDescription: String? {
+        "提交结果不确定，请核对服务器记录后再运行：\(detail)"
+    }
+}
+
 public final class SubmitProxyUnavailableError: Error, LocalizedError, @unchecked Sendable {
     public let message: String
     public init(_ message: String) { self.message = message }

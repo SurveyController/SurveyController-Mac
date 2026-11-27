@@ -20,16 +20,30 @@ public struct HTTPResponse: @unchecked Sendable {
 
 public enum TransportError: Error, LocalizedError {
     case network(String)
+    case proxyConnection(String)
+    case tlsTrust(String)
 
     public var errorDescription: String? {
         switch self {
-        case .network(let message): return message
+        case .network(let message), .proxyConnection(let message), .tlsTrust(let message): return message
         }
     }
 }
 
 /// HTTP 客户端（对标 software.network.http 的 aget/apost）。
 public final class HTTPClient: @unchecked Sendable {
+    private final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate {
+        func urlSession(
+            _ session: URLSession,
+            task: URLSessionTask,
+            willPerformHTTPRedirection response: HTTPURLResponse,
+            newRequest request: URLRequest
+        ) async -> URLRequest? {
+            nil
+        }
+    }
+
+    private static let noRedirectDelegate = NoRedirectDelegate()
     public static let shared = HTTPClient()
 
     private let session: URLSession
@@ -131,7 +145,8 @@ public final class HTTPClient: @unchecked Sendable {
         query: [String: String],
         formData: [String: String],
         headers: [String: String],
-        proxyAddress: String? = nil
+        proxyAddress: String? = nil,
+        followRedirects: Bool = true
     ) async throws -> HTTPResponse {
         var formHeaders = headers
         if formHeaders["Content-Type"] == nil {
@@ -147,7 +162,7 @@ public final class HTTPClient: @unchecked Sendable {
             method: "POST", urlString: urlString, headers: formHeaders,
             query: query, body: body, proxyAddress: proxyAddress
         )
-        return try await send(request, proxyAddress: proxyAddress)
+        return try await send(request, proxyAddress: proxyAddress, followRedirects: followRedirects)
     }
 
     /// multipart/form-data 提交（对标联系表单的 requests files= 用法；v0.1 仅文本字段）。
@@ -191,10 +206,15 @@ public final class HTTPClient: @unchecked Sendable {
         return try await send(request, proxyAddress: proxyAddress)
     }
 
-    func send(_ request: URLRequest, proxyAddress: String?) async throws -> HTTPResponse {
+    func send(
+        _ request: URLRequest,
+        proxyAddress: String?,
+        followRedirects: Bool = true
+    ) async throws -> HTTPResponse {
         let session = sessionForProxy(proxyAddress)
         do {
-            let (data, response) = try await session.data(for: request)
+            let delegate: URLSessionTaskDelegate? = followRedirects ? nil : Self.noRedirectDelegate
+            let (data, response) = try await session.data(for: request, delegate: delegate)
             guard let http = response as? HTTPURLResponse else {
                 throw TransportError.network("非 HTTP 响应")
             }
@@ -208,6 +228,21 @@ public final class HTTPClient: @unchecked Sendable {
         } catch let error as TransportError {
             throw error
         } catch {
+            var underlying: NSError? = error as NSError
+            while let cause = underlying {
+                if cause.domain == "kCFErrorDomainCFNetwork" && [306, 307, 310].contains(cause.code) {
+                    throw TransportError.proxyConnection(error.localizedDescription)
+                }
+                underlying = cause.userInfo[NSUnderlyingErrorKey] as? NSError
+            }
+            let trustErrors: [URLError.Code] = [
+                .secureConnectionFailed, .serverCertificateHasBadDate, .serverCertificateUntrusted,
+                .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid,
+                .clientCertificateRejected, .clientCertificateRequired,
+            ]
+            if let urlError = error as? URLError, trustErrors.contains(urlError.code) {
+                throw TransportError.tlsTrust(error.localizedDescription)
+            }
             throw TransportError.network(error.localizedDescription)
         }
     }
