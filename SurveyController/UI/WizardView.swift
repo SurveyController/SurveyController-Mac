@@ -507,6 +507,7 @@ struct NetworkStepView: View {
 
 struct CheckStepView: View {
     let model: AppModel
+    @State private var showingRehearsal = false
 
     var body: some View {
         let report = model.preflight
@@ -514,6 +515,12 @@ struct CheckStepView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Spacer()
+                    Button {
+                        showingRehearsal = true
+                    } label: {
+                        Label("离线试跑", systemImage: "checklist")
+                    }
+                    .disabled(!model.canStart)
                     Button {
                         exportConfig()
                     } label: {
@@ -534,8 +541,17 @@ struct CheckStepView: View {
                     CardView(title: "必须解决") {
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(Array(report.errors.enumerated()), id: \.offset) { _, line in
-                                Label(line, systemImage: "xmark.octagon.fill")
-                                    .foregroundStyle(.red)
+                                if let number = report.questionTargets[line] {
+                                    Button {
+                                        model.editQuestion(number)
+                                    } label: {
+                                        Label(line, systemImage: "arrow.right.circle")
+                                    }
+                                    .buttonStyle(.link)
+                                } else {
+                                    Label(line, systemImage: "xmark.octagon.fill")
+                                        .foregroundStyle(.red)
+                                }
                             }
                         }
                     }
@@ -552,6 +568,9 @@ struct CheckStepView: View {
             }
             .padding(24)
             .frame(maxWidth: 720, alignment: .leading)
+        }
+        .sheet(isPresented: $showingRehearsal) {
+            OfflineRehearsalView(model: model)
         }
     }
 

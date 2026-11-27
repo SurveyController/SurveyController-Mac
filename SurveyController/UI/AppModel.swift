@@ -76,6 +76,26 @@ public final class AppModel {
         }
     }
 
+    func editQuestion(_ number: Int) {
+        guard !isRunning, let index = runtimeConfig.questionsInfo.firstIndex(where: { $0.num == number }) else { return }
+        selectedQuestionIndex = index
+        goToStep(.answers)
+    }
+
+    func rehearse(seed: Int) async throws -> OfflineRehearsal.Report {
+        guard canStart else {
+            throw OfflineRehearsal.Issue(questionNumber: nil, message: "请先解析问卷并配置答案")
+        }
+        let snapshot = try ConfigCodec.compileRunSnapshot(runtimeConfig)
+        if snapshot.reverseFillEnabled && reverseFillSpec?.samples.isEmpty != false {
+            throw OfflineRehearsal.Issue(questionNumber: nil, message: "请先导入可用的反填数据")
+        }
+        let execution = ExecutionConfigBuilder.build(from: snapshot)
+        return try await OfflineRehearsal.generate(
+            config: execution, seed: seed, reverseFill: snapshot.reverseFillEnabled ? reverseFillSpec : nil
+        )
+    }
+
     public func nextStep() {
         if let next = WizardStep(rawValue: wizardStep.rawValue + 1) {
             goToStep(next)
@@ -256,6 +276,12 @@ public final class AppModel {
         public var errors: [String] = []
         public var warnings: [String] = []
         public var summary: [String] = []
+        var questionTargets: [String: Int] = [:]
+
+        mutating func addQuestionError(_ text: String, number: Int) {
+            errors.append(text)
+            questionTargets[text] = number
+        }
     }
 
     public var preflight: PreflightReport {
@@ -294,21 +320,16 @@ public final class AppModel {
             }
         }
 
-        let unsupported = questions.filter { $0.unsupported }
-        if !unsupported.isEmpty {
-            report.errors.append("第 \(unsupported.map { String($0.num) }.joined(separator: "、")) 题暂不支持：\(unsupported.first?.unsupportedReason ?? "")")
+        for question in questions where question.unsupported {
+            report.addQuestionError("第 \(question.num) 题暂不支持：\(question.unsupportedReason)", number: question.num)
         }
 
-        let logicReason = HttpLogicPlanner.fallbackReason(questions)
-        if !logicReason.isEmpty {
-            report.errors.append(logicReason + "，纯 HTTP 提交可能失败")
+        if let issue = HttpLogicPlanner.fallbackIssue(questions) {
+            report.addQuestionError(issue.message, number: issue.questionNumber)
         }
 
-        let unconfigured = questions.filter { question in
-            !entries.contains { $0.questionNum == question.num }
-        }
-        if !unconfigured.isEmpty {
-            report.errors.append("第 \(unconfigured.map { String($0.num) }.joined(separator: "、")) 题缺少作答配置")
+        for question in questions where !entries.contains(where: { $0.questionNum == question.num }) {
+            report.addQuestionError("第 \(question.num) 题缺少作答配置", number: question.num)
         }
 
         report.summary.append("问卷：\(surveyTitle.isEmpty ? "—" : surveyTitle)（\(questions.count) 题，\(providerLabel)）")
@@ -330,15 +351,21 @@ public final class AppModel {
         if runtimeConfig.answerDuration.0 < 30 {
             report.warnings.append("作答时长过短（<30 秒）容易被判定为无效答卷")
         }
-        let aiRequired = entries.contains { entry in
-            entry.aiEnabled || entry.multiTextBlankAiFlags.contains(true)
-                || (entry.optionFillTexts ?? []).contains {
-                    if let choices = $0 as? [String] { return choices.contains(optionFillAiToken) }
-                    return JSONCoercion.asTrimmedString($0) == optionFillAiToken
+        if effectiveAI(for: runtimeConfig) == nil {
+            for entry in entries {
+                let needsAI = entry.aiEnabled || entry.multiTextBlankAiFlags.contains(true)
+                    || (entry.optionFillTexts ?? []).contains {
+                        if let choices = $0 as? [String] { return choices.contains(optionFillAiToken) }
+                        return JSONCoercion.asTrimmedString($0) == optionFillAiToken
+                    }
+                guard needsAI else { continue }
+                let message = "请完成自定义 AI 设置或修改题目配置"
+                if let number = entry.questionNum {
+                    report.addQuestionError("第 \(number) 题需要 AI。\(message)", number: number)
+                } else if !report.errors.contains(message) {
+                    report.errors.append(message)
                 }
-        }
-        if aiRequired && effectiveAI(for: runtimeConfig) == nil {
-            report.errors.append("请在设置中完成自定义 AI 配置，或调整使用 AI 的题目")
+            }
         }
         return report
     }

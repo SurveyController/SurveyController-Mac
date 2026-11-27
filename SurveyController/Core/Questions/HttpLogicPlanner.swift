@@ -53,6 +53,10 @@ public enum HttpLogicPlanner {
 
     /// 对标 get_http_logic_fallback_reason：返回不支持纯 HTTP 提交的原因（空串 = 支持）。
     public static func fallbackReason(_ questions: [SurveyQuestionMeta]) -> String {
+        fallbackIssue(questions)?.message ?? ""
+    }
+
+    static func fallbackIssue(_ questions: [SurveyQuestionMeta]) -> (questionNumber: Int, message: String)? {
         let ordered = orderedQuestions(questions)
         let maxQuestionNum = ordered.map { $0.num }.max() ?? 0
 
@@ -61,7 +65,7 @@ public enum HttpLogicPlanner {
             if questionNum <= 0 || !questionHasSurveyLogic(question) { continue }
 
             if !logicStatusIsCompleteEnough(question) {
-                return "第\(questionNum)题逻辑规则未完整解析"
+                return (questionNum, "第\(questionNum)题逻辑规则未完整解析")
             }
 
             for condition in question.displayConditions {
@@ -70,13 +74,13 @@ public enum HttpLogicPlanner {
                     ? "selected"
                     : JSONCoercion.asTrimmedString(condition["condition_mode"])
                 if sourceQuestionNum <= 0 {
-                    return "第\(questionNum)题显隐条件缺少来源题号"
+                    return (questionNum, "第\(questionNum)题显隐条件缺少来源题号")
                 }
                 if sourceQuestionNum >= questionNum {
-                    return "第\(questionNum)题显隐条件依赖未来题目"
+                    return (questionNum, "第\(questionNum)题显隐条件依赖未来题目")
                 }
                 if !supportedConditionModes.contains(conditionMode) {
-                    return "第\(questionNum)题显隐条件模式不支持：\(conditionMode)"
+                    return (questionNum, "第\(questionNum)题显隐条件模式不支持：\(conditionMode)")
                 }
             }
 
@@ -86,10 +90,10 @@ public enum HttpLogicPlanner {
                     ? "selected"
                     : JSONCoercion.asTrimmedString(target["condition_mode"])
                 if targetQuestionNum <= questionNum {
-                    return "第\(questionNum)题控制显示规则存在回跳"
+                    return (questionNum, "第\(questionNum)题控制显示规则存在回跳")
                 }
                 if !supportedConditionModes.contains(conditionMode) {
-                    return "第\(questionNum)题控制显示模式不支持：\(conditionMode)"
+                    return (questionNum, "第\(questionNum)题控制显示模式不支持：\(conditionMode)")
                 }
             }
 
@@ -97,14 +101,14 @@ public enum HttpLogicPlanner {
                 let jumpTarget = JSONCoercion.asInt(rule["jumpto"])
                 if jumpRuleTerminatesSurvey(rule) { continue }
                 if jumpTarget <= questionNum {
-                    return "第\(questionNum)题跳题目标回跳到已过题目"
+                    return (questionNum, "第\(questionNum)题跳题目标回跳到已过题目")
                 }
                 if maxQuestionNum > 0 && jumpTarget > maxQuestionNum + 1 {
-                    return "第\(questionNum)题跳题目标超出问卷范围"
+                    return (questionNum, "第\(questionNum)题跳题目标超出问卷范围")
                 }
             }
         }
-        return ""
+        return nil
     }
 
     static func actionSelectedIndices(_ action: AnswerAction) -> Set<Int> {
