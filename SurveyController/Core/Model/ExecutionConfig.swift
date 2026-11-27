@@ -10,6 +10,8 @@ public typealias QuestionConfigEntry = (entryType: String, configIndex: Int)
 public struct ExecutionConfig: @unchecked Sendable {
     public var url: String = ""
     public var surveyProvider: SurveyProvider = .wjx
+    var answerDatetimeWindowMs: (Int, Int) = (0, 0)
+    var reverseFill: ReverseFillRuntime?
     public var targetNum: Int = 1
     public var numThreads: Int = 1
     public var stopOnFailEnabled: Bool = true
@@ -60,6 +62,8 @@ public enum ExecutionConfigBuilder {
         execution.stopOnFailEnabled = config.failStopEnabled
         execution.submitIntervalRangeSeconds = config.submitInterval
         execution.answerDurationRangeSeconds = config.answerDuration
+        let window = answerDatetimeWindowToEpochMs([config.answerDatetimeWindow.0, config.answerDatetimeWindow.1])
+        execution.answerDatetimeWindowMs = (window.startMs, window.endMs)
         execution.randomProxyIpEnabled = config.randomIpEnabled
         execution.proxySource = config.proxySource
         execution.customProxyApi = config.customProxyApi

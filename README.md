@@ -23,7 +23,7 @@
 ## 主要特性
 
 1. **原生 Mac 体验** - 纯 Swift + SwiftUI 构建，六步向导式流程，macOS 14+ 原生界面
-2. **多平台支持** - v0.1 起支持问卷星全链路，腾讯问卷、Credamo见数后续版本跟进
+2. **多平台支持** - 支持问卷星、腾讯问卷和 Credamo 见数的公开问卷。可读取二维码图片，问卷星支持 Excel 反填
 3. **问卷星新题型** - 对齐官方 v4.1.0，支持多级下拉题与隐藏空占位题过滤
 4. **定制答案比例** - 自定义各选项权重与多选题命中概率分布，实时显示归一化比例
 5. **指定ip地区** - 省市级地区选择，支持随机IP或指定特定地区IP提交
@@ -95,8 +95,8 @@ flowchart TB
 
   link --> detect
   detect --> wjx_parse
-  detect --> tencent_todo["腾讯问卷<br/>（后续版本）"]
-  detect --> credamo_todo["Credamo 见数<br/>（后续版本）"]
+  detect --> tencent["腾讯问卷适配器"]
+  detect --> credamo["Credamo 见数适配器"]
 
   subgraph wjx["问卷星 HTTP 链路"]
     wjx_parse["GET 问卷页面<br/>解析 shortid / starttime"]
@@ -128,7 +128,6 @@ flowchart TB
 欢迎提交 Pull Request！开始前请阅读[贡献指南](CONTRIBUTING.md)与[行为准则](CODE_OF_CONDUCT.md)。
 
 改进方向包括但不限于：
-- 腾讯问卷 / Credamo见数 链路移植
 - 信度系数、AI 填空、反填等官方功能对齐
 - macOS 原生特性（菜单栏、快捷键、小组件）
 - 性能优化与代码重构

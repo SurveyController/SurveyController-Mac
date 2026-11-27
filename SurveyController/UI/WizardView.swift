@@ -1,6 +1,7 @@
 // 对标官方 5.0 向导式主流程：问卷 → 答案 → 任务 → 网络 → 检查 → 运行。
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct WizardView: View {
     @Bindable var model: AppModel
@@ -121,7 +122,10 @@ struct SurveyStepView: View {
         VStack(spacing: 0) {
             HStack {
                 Spacer()
+                Button("读取二维码图片…") { importQRImage() }
+                    .disabled(model.isRunning)
                 Button("导入已有配置…") { importConfig() }
+                    .disabled(model.isRunning)
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
@@ -141,13 +145,13 @@ struct SurveyStepView: View {
                 }
                 Text("添加要填写的问卷")
                     .font(.title2.bold())
-                Text("粘贴问卷星链接，解析成功后自动进入答案配置")
+                Text("粘贴问卷链接或读取二维码，解析成功后自动进入答案配置")
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 10) {
                     Image(systemName: "link")
                         .foregroundStyle(.tertiary)
-                    TextField("https://www.wjx.cn/vm/xxxx.aspx", text: $model.surveyUrl)
+                    TextField("问卷链接", text: $model.surveyUrl)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 430)
                         .disabled(model.isRunning)
@@ -184,6 +188,19 @@ struct SurveyStepView: View {
                 }
             }
             Spacer()
+        }
+    }
+
+    private func importQRImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            model.surveyUrl = try SurveyQRDecoder.surveyURL(from: url)
+            Task { await model.parseSurvey() }
+        } catch {
+            model.showToast(error.localizedDescription)
         }
     }
 
@@ -256,6 +273,20 @@ struct TaskStepView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
+                if model.surveyProvider == .wjx {
+                    reverseFillCard
+                }
+                if model.surveyProvider == .credamo {
+                    CardView(title: "作答日期") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("开始时间", text: $model.runtimeConfig.answerDatetimeWindow.0)
+                            TextField("结束时间", text: $model.runtimeConfig.answerDatetimeWindow.1)
+                            Text("YYYY-MM-DD HH:MM:SS，两个字段均可留空")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 CardView(title: "任务行为") {
                     Toggle("连续失败 5 份自动停止", isOn: $model.runtimeConfig.failStopEnabled)
                 }
@@ -263,6 +294,47 @@ struct TaskStepView: View {
             .padding(24)
             .frame(maxWidth: 760, alignment: .leading)
         }
+    }
+    private var reverseFillCard: some View {
+        CardView(title: "Excel 反填") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("启用 Excel 反填", isOn: $model.runtimeConfig.reverseFillEnabled)
+                Picker("导出格式", selection: $model.runtimeConfig.reverseFillFormat) {
+                    Text("自动识别").tag(reverseFillFormatAuto)
+                    Text("选项序号").tag(reverseFillFormatWjxSequence)
+                    Text("分值").tag(reverseFillFormatWjxScore)
+                    Text("选项文本").tag(reverseFillFormatWjxText)
+                }
+                Stepper("起始行：\(model.runtimeConfig.reverseFillStartRow)", value: $model.runtimeConfig.reverseFillStartRow, in: 1...9999)
+                Stepper("反填并发：\(model.runtimeConfig.reverseFillThreads)", value: $model.runtimeConfig.reverseFillThreads, in: 1...RunEngine.maxThreads)
+                Button("选择 Excel 文件…") { chooseReverseFillFile() }
+                if let spec = model.reverseFillSpec {
+                    Text("\(spec.samples.count) 个可用样本，共 \(spec.totalRows) 行")
+                    if !spec.unmatched.isEmpty {
+                        Text("未匹配的题号：\(spec.unmatched.map(String.init).joined(separator: "、"))")
+                            .foregroundStyle(.secondary)
+                    }
+                    if !spec.invalidRows.isEmpty {
+                        Text("无法使用的行：\(spec.invalidRows.prefix(20).map(String.init).joined(separator: "、"))")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(spec.samples.prefix(5), id: \.row) { sample in
+                        Text("第 \(sample.row) 行 · \(sample.answers.count) 道题")
+                            .font(.caption)
+                    }
+                }
+            }
+        }
+       .onChange(of: model.runtimeConfig.reverseFillFormat) { Task { await model.reloadReverseFill() } }
+        .onChange(of: model.runtimeConfig.reverseFillStartRow) { Task { await model.reloadReverseFill() } }
+    }
+
+    private func chooseReverseFillFile() {
+        let panel = NSOpenPanel()
+        if let type = UTType(filenameExtension: "xlsx") { panel.allowedContentTypes = [type] }
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await model.loadReverseFill(from: url) }
     }
 }
 

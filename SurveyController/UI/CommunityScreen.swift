@@ -4,8 +4,6 @@
 import SwiftUI
 
 struct CommunityScreen: View {
-    @State private var showContactSheet = false
-
     private let columns = [GridItem(.adaptive(minimum: 420), spacing: 16)]
 
     var body: some View {
@@ -29,9 +27,6 @@ struct CommunityScreen: View {
             .padding(28)
         }
         .background(Color(nsColor: .controlBackgroundColor))
-        .sheet(isPresented: $showContactSheet) {
-            ContactSheet()
-        }
     }
 
     // MARK: - QQ 群
@@ -87,11 +82,13 @@ struct CommunityScreen: View {
 
     private var contactCard: some View {
         CommunityCard(title: "联系开发者", icon: { FeedbackIcon(size: 22) }, content: {
-            Text("遇到问题？有建议？不想加 QQ 群？\n可以直接在此处与我们沟通，我们会尽快回复。")
+            Text("在 GitHub 报告问题或提出建议")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("发送消息") { showContactSheet = true }
+            if let url = URL(string: AppVersion.issueFeedbackUrl) {
+                Link("打开问题反馈", destination: url)
+            }
         })
     }
 
@@ -182,88 +179,5 @@ struct SFIcon: View {
         Image(systemName: systemImage)
             .font(.system(size: 18))
             .foregroundStyle(.tint)
-    }
-}
-
-// MARK: - 反馈表单（对标 ContactDialog 简化版）
-
-struct ContactSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var messageType = "问题反馈"
-    @State private var messageText = ""
-    @State private var sending = false
-    @State private var resultText = ""
-
-    private let messageTypes = ["问题反馈", "功能建议", "其他"]
-    private let contactApiUrl = "https://bot.hungrym0.com"
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("联系开发者").font(.title3.bold())
-
-            Picker("类型", selection: $messageType) {
-                ForEach(messageTypes, id: \.self) { Text($0) }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 300)
-
-            TextEditor(text: $messageText)
-                .font(.body)
-                .frame(minHeight: 140)
-                .border(Color(nsColor: .separatorColor))
-
-            if !resultText.isEmpty {
-                Text(resultText)
-                    .font(.callout)
-                    .foregroundStyle(resultText.hasPrefix("发送失败") ? .red : .green)
-            }
-
-            HStack {
-                Spacer()
-                Button("取消") { dismiss() }
-                Button {
-                    Task { await send() }
-                } label: {
-                    if sending {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text("发送")
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(sending || messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(20)
-        .frame(width: 460)
-    }
-
-    func send() async {
-        sending = true
-        defer { sending = false }
-
-        let session = RandomIPSessionStore.shared.readSession()
-        var fields: [String: String] = [
-            "message": "【macOS v\(AppVersion.version)】\(messageText.trimmingCharacters(in: .whitespacesAndNewlines))",
-            "messageType": messageType,
-            "timestamp": ISO8601DateFormatter().string(from: Date()),
-        ]
-        if session.userId > 0 {
-            fields["userId"] = String(session.userId)
-        }
-        do {
-            let response = try await HTTPClient.shared.postMultipart(contactApiUrl, fields: fields, headers: [
-                "Accept": "application/json",
-            ])
-            if response.isSuccess {
-                resultText = "发送成功，感谢反馈！"
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
-                dismiss()
-            } else {
-                resultText = "发送失败：HTTP \(response.statusCode)"
-            }
-        } catch {
-            resultText = "发送失败：\(error.localizedDescription)"
-        }
     }
 }
