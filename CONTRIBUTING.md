@@ -300,6 +300,7 @@ Fixes #123
 仓库根目录
 ├── .github/                  # GitHub Actions（CI 与 Release）
 ├── assets/                   # README 图标、二维码等仓库资源
+├── static/screenshot/         # README 中的界面截图
 ├── SurveyController/         # 应用主体
 │   ├── App/                  # 版本常量
 │   ├── Core/                 # 核心业务

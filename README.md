@@ -1,153 +1,76 @@
 <div align="center">
-  <img src="assets/app_logo.png" alt="SurveyController" width="120" height="120" />
   <h1>SurveyController Mac</h1>
-
-  [![GitHub Stars](https://img.shields.io/github/stars/SurveyController/SurveyController-Mac?style=flat&logo=github&color=yellow)](https://github.com/SurveyController/SurveyController-Mac/stargazers)
-  [![GitHub Release](https://img.shields.io/github/v/release/SurveyController/SurveyController-Mac?style=flat&logo=github&color=blue)](https://github.com/SurveyController/SurveyController-Mac/releases/latest)
-  ![Downloads](https://img.shields.io/github/downloads/SurveyController/SurveyController-Mac/total?style=flat&logo=github&color=green)
-  [![Issues](https://img.shields.io/github/issues/SurveyController/SurveyController-Mac?style=flat&logo=github)](https://github.com/SurveyController/SurveyController-Mac/issues)
-  [![Swift](https://img.shields.io/badge/Swift-6-F05138?style=flat&logo=swift&logoColor=white)](https://swift.org/)
-  [![macOS](https://img.shields.io/badge/macOS-14+-000000?style=flat&logo=macos&logoColor=white)](https://www.apple.com/macos/)
-  [![License](https://img.shields.io/github/license/SurveyController/SurveyController-Mac?style=flat&color=orange)](./LICENSE)
-
-  <p><strong>一站式问卷自动化处理程序 macOS 端，适配问卷星、腾讯问卷、Credamo见数平台</strong></p>
-  <p>支持指定ip填写地区、信度系数、作答时长与分布比例</p>
-
+  <p><img src="assets/app_logo.png" alt="SurveyController Mac 图标" width="88"></p>
+  <p>在 macOS 上解析问卷、配置答案策略，并对已获授权的问卷进行自动化测试。</p>
+  <p>支持问卷星、腾讯问卷和 Credamo（见数）。需要 macOS 14 或更新版本。</p>
+  <p>
+    <a href="https://github.com/SurveyController/SurveyController-Mac/releases/latest"><img src="https://img.shields.io/github/v/release/SurveyController/SurveyController-Mac?label=macOS%20Release" alt="前往 GitHub 下载 macOS 安装包"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPL--3.0-blue" alt="查看 GPL-3.0 许可证"></a>
+  </p>
+  <p><a href="#下载安装">安装说明</a> · <a href="#功能特性">功能特性</a> · <a href="#交流与贡献">交流与贡献</a></p>
+  <p><a href="static/screenshot/workspace-dark.png"><img src="static/screenshot/workspace-dark.png" alt="macOS 深色工作台，显示问卷链接输入、二维码图片与配置导入入口" width="760"></a></p>
+  <p><sub>开发版预览 · macOS 深色工作台</sub></p>
 </div>
 
-> [!WARNING]
-> **该项目仅供 HTTP 接口自动化学习与测试使用。** 请确保拥有目标测试问卷的授权再使用，**严禁污染他人问卷数据！**
+> [!IMPORTANT]
+> 本项目面向 HTTP 接口学习和问卷测试。请先取得问卷所有者的授权，并在约定的测试范围内使用。
 
----
+## 功能特性
 
-## 主要特性
+| 能力 | 问卷星 | 腾讯问卷 | Credamo（见数） |
+| --- | --- | --- | --- |
+| 粘贴链接或导入二维码图片 | 支持 | 支持 | 支持 |
+| 自定义答案比例 | 支持 | 支持 | 支持 |
+| 自定义 AI 填空 | 支持 | 支持 | 支持 |
+| 设置作答时长 | 支持 | 支持 | 支持 |
+| 从 Excel 反填 | 支持 | — | — |
+| 设置作答日期窗口 | — | — | 支持 |
 
-1. **原生 Mac 体验** - 纯 Swift + SwiftUI 构建，六步向导式流程，macOS 14+ 原生界面
-2. **多平台支持** - 支持问卷星、腾讯问卷和 Credamo 见数的公开问卷。可读取二维码图片，问卷星支持 Excel 反填
-3. **问卷星新题型** - 对齐官方 v4.1.0，支持多级下拉题与隐藏空占位题过滤
-4. **定制答案比例** - 自定义各选项权重与多选题命中概率分布，实时显示归一化比例
-5. **指定ip地区** - 省市级地区选择，支持随机IP或指定特定地区IP提交
-6. **配置导入导出** - 与 Windows 桌面版配置文件互通，跨设备同步
-7. **运行体验** - 并发槽位、暂停/继续、完成系统通知、日志按次存档、防休眠
+Mac 端使用 SwiftUI 原生工作区，支持配置导入导出、任务暂停与恢复、运行日志存档。任务参数可调整并发、提交间隔、代理地区和设备类型，量表题支持信度计划。配置文件可用于在桌面端和移动端之间迁移设置，具体可用项受问卷平台和题型影响。
 
-## 演示视频
-
-![演示视频](https://github.com/SurveyController/SurveyController-Mac/releases/download/v0.1.0/demo.gif)
+开发版加入了题目搜索、配置检查跳转和离线试跑。使用同一份配置和随机种子，可以在本机复现最多 20 份样例，查看逐题答案、规则命中和选项分布。试跑只生成本地预览，AI 填空显示占位文本。
 
 ## 开始使用
 
-> [!TIP]
-> **安装包：** 前往 [发行版](https://github.com/SurveyController/SurveyController-Mac/releases/latest) 下载最新版本 DMG，打开后把 SurveyController 拖入「应用程序」文件夹即可
+### 使用要求
 
-**系统要求：** macOS 14（Sonoma）及以上
+- macOS 14（Sonoma）或更新版本，支持 Apple Silicon 和 Intel Mac。
 
-> [!NOTE]
-> 首个版本未做 Developer ID 公证，首次打开请右键 →「打开」，或在「系统设置 → 隐私与安全性」中允许。
+### 下载安装
 
-建议配合[教程文档](https://surveydoc.hungrym0.com/)食用。Windows 版请前往 [SurveyController](https://github.com/SurveyController/SurveyController)，安卓版请前往 [SurveyController-Android](https://github.com/shiaho777/SurveyController-Android)。
+1. 在 GitHub Releases 下载 `macOS.dmg` 安装包。 [下载最新稳定版](https://github.com/SurveyController/SurveyController-Mac/releases/latest)
+2. 打开磁盘映像，把 **SurveyController.app** 拖到「应用程序」。也可以下载 ZIP 并解压得到应用。
 
-### 从源码构建
+当前发布包未经 Apple 公证。遇到系统提示时，请核对下载来源并参阅 Apple 的说明。 [在 Mac 上安全地打开 App](https://support.apple.com/zh-cn/102445)
 
-**环境要求：** Xcode 16+ / macOS 14+
+### 从源码运行
+
+需要 Xcode 16 或更新版本。打开 `SurveyController.xcodeproj`，选中 `SurveyController` scheme 后运行，也可以使用命令行。
 
 ```bash
 git clone https://github.com/SurveyController/SurveyController-Mac.git
 cd SurveyController-Mac
-open SurveyController.xcodeproj   # Xcode 中 Cmd+R 运行
-
-# 或命令行构建
 xcodebuild -project SurveyController.xcodeproj -scheme SurveyController build
-
-# 运行单元测试（102 个用例）
 xcodebuild -project SurveyController.xcodeproj -scheme SurveyController test
 ```
 
 ## 使用方法
 
-1. **输入问卷** - 在「任务」页粘贴问卷链接（剪贴板有链接时一键粘贴）
-2. **自动解析** - 点击 `下一步`，自动识别平台和题目结构
-3. **调整配置** - 在「答案」步对各题拖动滑块设置答案权重和概率分布
-4. **设置运行参数** - 在「任务 / 网络」步指定目标份数、并发数、随机IP与地区等设置项
-5. **检查并运行** - 预检通过后点击 `开始执行` 并等待任务完成
+1. 粘贴公开问卷链接或导入二维码图片，解析问卷。
+2. 在「答案」里调整题目权重和填空内容，再设置任务参数和连接选项。
+3. 检查配置后，在测试问卷上执行任务。
 
-## 关键配置说明
+可以在「设置」中配置自定义 AI。密钥存入 macOS 钥匙串，默认从导出的配置中省略。 [上游使用教程](https://surveydoc.hungrym0.com/)
 
-| 配置项 | 说明 |
-|--------|------|
-| **目标份数** | 计划提交的问卷总数。建议先测试 3~5 份，确认配置没问题后再增加 |
-| **并发数** | 同时提交的任务数量。并发越高速度越快，但失败率也可能更高 |
-| **随机 IP** | 使用代理 IP 模拟不同地区访问。可指定省市地区，会消耗随机 IP 额度或自备代理资源 |
-| **User-Agent** | HTTP 请求标识，决定问卷后台看到的访问设备来源 |
-| **作答时长** | 高斯分布采样，控制问卷后台记录的作答耗时 |
-| **提交间隔** | 同一并发的两次提交之间随机等待的秒数区间 |
+## 交流与贡献
 
-详细配置项请参考[教程文档](https://surveydoc.hungrym0.com/runtime.html)。
+- 遇到问题时，请提供应用版本、macOS 版本、复现步骤和预期结果。分享截图或日志前请隐去密钥和问卷数据。 [GitHub Issues](https://github.com/SurveyController/SurveyController-Mac/issues)
+- 欢迎贡献 macOS 原生交互、题型兼容性和测试用例。 [贡献指南](CONTRIBUTING.md) · [行为准则](CODE_OF_CONDUCT.md)
+- 开发者可以从上游核心库了解平台和题型的适配方式。 [surveycore-py](https://github.com/SurveyController/surveycore-py)
+- QQ 交流群 **346131215**。
 
-## 技术架构
+<img src="assets/community_qr.png" alt="SurveyController QQ 交流群二维码" width="152">
 
-```mermaid
-flowchart TB
-  link["问卷链接"]
-  detect["平台识别"]
-  config["答题配置<br/>选项权重 / 多选概率 / 填空内容 / 作答时长"]
-  session["HTTP 会话<br/>User-Agent / Referer / 代理 IP"]
-  result["提交结果<br/>成功 / 失败 / 重试"]
+## 贡献者与许可
 
-  link --> detect
-  detect --> wjx_parse
-  detect --> tencent["腾讯问卷适配器"]
-  detect --> credamo["Credamo 见数适配器"]
-
-  subgraph wjx["问卷星 HTTP 链路"]
-    wjx_parse["GET 问卷页面<br/>解析 shortid / starttime"]
-    wjx_answer["生成 submitdata<br/>1$选项}2$文本"]
-    wjx_params["构造提交参数<br/>starttime / cst / ktimes / rn<br/>jqnonce / jqsign / t"]
-    wjx_submit["POST processjq.ashx<br/>data: submitdata / sceneId"]
-    wjx_parse --> wjx_answer --> wjx_params --> wjx_submit
-  end
-
-  config --> wjx_answer
-  session --> wjx_submit
-  wjx_submit --> result
-```
-
-- **UI 层**：SwiftUI（NavigationSplitView 侧边导航 + 六步向导），对标官方 PySide6 Fluent 界面结构
-- **引擎层**：Swift Concurrency（actor + TaskGroup），对标官方 asyncio 引擎
-- **平台适配层**：Provider 协议 + 注册表，对标官方 providers/registry.py
-- **依赖**：仅 SwiftSoup（HTML 解析），其余全部系统框架
-
-## 交流群
-
-如有疑问或需要技术支持，可加入QQ群：
-346131215
-
-<img width="256" alt="qq" src="assets/community_qr.png" />
-
-## 参与贡献
-
-欢迎提交 Pull Request！开始前请阅读[贡献指南](CONTRIBUTING.md)与[行为准则](CODE_OF_CONDUCT.md)。
-
-改进方向包括但不限于：
-- macOS 原生特性（菜单栏、快捷键、小组件）
-- 性能优化与代码重构
-
-## 贡献者
-
-感谢以下贡献者对本项目的支持：
-
-<div style="display: flex; gap: 10px;">
-  <a href="https://github.com/shiaho777">
-    <img src="https://github.com/shiaho777.png" width="50" height="50" alt="shiaho777" style="border-radius: 50%;" />
-  </a>
-  <a href="https://github.com/hungryM0">
-    <img src="https://github.com/hungryM0.png" width="50" height="50" alt="hungryM0" style="border-radius: 50%;" />
-  </a>
-</div>
-
-## 致谢
-
-本项目基于 [SurveyController](https://github.com/SurveyController/SurveyController) macOS 端移植，感谢原项目团队的开源贡献。
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=SurveyController/SurveyController-Mac&type=date&legend=top-left)](https://www.star-history.com/#SurveyController/SurveyController-Mac&type=date&legend=top-left)
+感谢 [shiaho777](https://github.com/shiaho777)、[hungryM0](https://github.com/hungryM0) 和上游团队的贡献。Mac 端是社区维护的 macOS 移植版，源码按 GPL-3.0 分发。 [Windows 上游](https://github.com/SurveyController/SurveyController) · [Android 版](https://github.com/SurveyController/SurveyController-Android) · [许可证](LICENSE) · [Star History](https://www.star-history.com/#SurveyController/SurveyController-Mac&type=date)
