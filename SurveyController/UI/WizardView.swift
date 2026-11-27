@@ -25,7 +25,7 @@ struct WizardView: View {
             if model.wizardStep != .survey {
                 Rectangle().fill(StudioStyle.border).frame(height: 1)
                 navBar
-                    .background(StudioStyle.panel)
+                    .background(StudioStyle.toolbar)
             }
         }
     }
@@ -54,10 +54,11 @@ struct WizardView: View {
             }
             Spacer()
             if model.wizardStep == .check {
-                Label(model.preflight.errors.isEmpty ? "配置检查通过" : "有待修复的配置",
-                      systemImage: model.preflight.errors.isEmpty ? "checkmark.circle" : "exclamationmark.circle")
+                let passed = model.preflight.errors.isEmpty
+                Label(passed ? "配置检查通过" : "有待修复的配置",
+                      systemImage: passed ? "checkmark.circle" : "exclamationmark.circle")
                     .font(.caption)
-                    .foregroundStyle(StudioStyle.muted)
+                    .foregroundStyle(passed ? StudioStyle.success : StudioStyle.danger)
             }
             Spacer()
             if model.wizardStep == .run {
@@ -77,26 +78,29 @@ struct WizardView: View {
                         }
                         .controlSize(.large)
                     }
-                    Button("停止任务") { model.stopRun() }
+                    Button("停止任务", role: .destructive) { model.stopRun() }
                         .controlSize(.large)
+                        .tint(StudioStyle.danger)
                 } else {
                     Button {
                         Task { await model.startRun() }
                     } label: {
-                        Label("开始执行", systemImage: "play.fill")
+                        Label("开始执行", systemImage: "play.fill").studioActionLabel()
                     }
                     .controlSize(.large)
                     .buttonStyle(.borderedProminent)
+                    .tint(StudioStyle.accent)
                     .disabled(!model.canStart || !model.preflight.errors.isEmpty)
                 }
             } else if model.wizardStep != .survey {
                 Button {
                     model.nextStep()
                 } label: {
-                    Label(model.wizardStep == .check ? "进入运行" : "下一步", systemImage: "chevron.right")
+                    Label(model.wizardStep == .check ? "进入运行" : "下一步", systemImage: "chevron.right").studioActionLabel()
                 }
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
+                .tint(StudioStyle.accent)
             }
         }
         .padding(.horizontal, 24)
@@ -122,6 +126,7 @@ private extension AppModel.WizardStep {
 
 struct SurveyStepView: View {
     @Bindable var model: AppModel
+    @FocusState private var linkFocused: Bool
 
     var body: some View {
         ScrollView {
@@ -164,9 +169,9 @@ struct SurveyStepView: View {
                 Spacer()
                 Image(systemName: "list.bullet.clipboard")
                     .font(.system(size: 31, weight: .medium))
-                    .foregroundStyle(StudioStyle.accent)
+                    .foregroundStyle(StudioStyle.badgeInk)
                     .frame(width: 59, height: 59)
-                    .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 19))
+                    .background(StudioStyle.badge, in: RoundedRectangle(cornerRadius: 19))
                     .accessibilityHidden(true)
             }
             HStack(spacing: 9) {
@@ -174,6 +179,7 @@ struct SurveyStepView: View {
                     Image(systemName: "link").foregroundStyle(StudioStyle.muted)
                     TextField("粘贴问卷链接", text: $model.surveyUrl)
                         .textFieldStyle(.plain)
+                        .focused($linkFocused)
                         .onSubmit(openSurvey)
                         .foregroundStyle(StudioStyle.ink)
                         .disabled(model.isRunning)
@@ -191,7 +197,7 @@ struct SurveyStepView: View {
                 }
                 .padding(.horizontal, 13)
                 .frame(height: 43)
-                .background(StudioStyle.canvas, in: RoundedRectangle(cornerRadius: 12))
+                .studioField(focused: linkFocused, radius: 12)
                 Button(action: openSurvey) {
                     HStack(spacing: 8) {
                         if model.parsePhase == .parsing {
@@ -201,10 +207,10 @@ struct SurveyStepView: View {
                         if model.parsePhase != .parsing { Image(systemName: "arrow.right") }
                     }
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(canParse ? StudioStyle.onAccent : StudioStyle.muted)
+                    .foregroundStyle(canParse ? StudioStyle.onPrimaryButton : StudioStyle.muted)
                     .padding(.horizontal, 13)
                     .frame(height: 43)
-                    .background(canParse ? StudioStyle.accent : StudioStyle.raised, in: RoundedRectangle(cornerRadius: 12))
+                    .background(canParse ? StudioStyle.accent : StudioStyle.disabledButton, in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
                 .disabled(!canParse)
@@ -225,7 +231,7 @@ struct SurveyStepView: View {
 
     private var currentSurvey: some View {
         HStack(spacing: 13) {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(StudioStyle.accent)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(StudioStyle.success)
             VStack(alignment: .leading, spacing: 3) {
                 Text(model.surveyTitle.isEmpty ? "已解析问卷" : model.surveyTitle)
                     .font(.subheadline.weight(.semibold)).lineLimit(2)
@@ -236,8 +242,13 @@ struct SurveyStepView: View {
             if let url = URL(string: model.surveyUrl), url.scheme != nil {
                 Link("查看问卷", destination: url)
             }
-            Button("继续编辑") { model.goToStep(.answers) }
-                .buttonStyle(.borderedProminent)
+            Button {
+                model.goToStep(.answers)
+            } label: {
+                Text("继续编辑").studioActionLabel()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(StudioStyle.accent)
         }
         .padding(16)
         .studioPanel()
@@ -248,9 +259,9 @@ struct SurveyStepView: View {
             HStack(spacing: 11) {
                 Image(systemName: icon)
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(StudioStyle.accent)
+                    .foregroundStyle(StudioStyle.badgeInk)
                     .frame(width: 42, height: 42)
-                    .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 12))
+                    .background(StudioStyle.badge, in: RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.subheadline.weight(.semibold))
                     Text(detail).font(.caption).foregroundStyle(StudioStyle.muted)
@@ -449,7 +460,7 @@ struct NetworkStepView: View {
                             } else if model.quotaKnown {
                                 Text("剩余额度 \(model.quotaRemaining, format: .number)")
                                     .monospacedDigit()
-                                    .foregroundStyle(model.quotaRemaining > 0 ? .green : .red)
+                                    .foregroundStyle(model.quotaRemaining > 0 ? StudioStyle.success : StudioStyle.danger)
                             }
                         }
 
@@ -599,9 +610,9 @@ struct CheckStepView: View {
                 HStack(spacing: 13) {
                     Image(systemName: "checklist")
                         .font(.system(size: 25, weight: .semibold))
-                        .foregroundStyle(StudioStyle.accent)
+                        .foregroundStyle(StudioStyle.badgeInk)
                         .frame(width: 48, height: 48)
-                        .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 14))
+                        .background(StudioStyle.badge, in: RoundedRectangle(cornerRadius: 14))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("离线试跑").font(.headline)
@@ -616,8 +627,8 @@ struct CheckStepView: View {
                             .font(.subheadline.weight(.semibold))
                             .padding(.vertical, 9)
                             .padding(.horizontal, 12)
-                            .foregroundStyle(model.canStart ? StudioStyle.onAccent : StudioStyle.muted)
-                            .background(model.canStart ? StudioStyle.accent : StudioStyle.raised, in: RoundedRectangle(cornerRadius: 10))
+                            .foregroundStyle(model.canStart ? StudioStyle.onPrimaryButton : StudioStyle.muted)
+                            .background(model.canStart ? StudioStyle.accent : StudioStyle.disabledButton, in: RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
                     .disabled(!model.canStart)
@@ -712,7 +723,7 @@ struct RunStepView: View {
                     let fraction = Double(model.progress.successCount) / Double(max(1, model.progress.target))
                     ZStack(alignment: .leading) {
                         Capsule().fill(StudioStyle.raised)
-                        Capsule().fill(StudioStyle.accent)
+                        Capsule().fill(fraction >= 1 ? StudioStyle.success : StudioStyle.accent)
                             .frame(width: max(0, min(1, fraction)) * geometry.size.width)
                     }
                 }
@@ -724,7 +735,8 @@ struct RunStepView: View {
             .studioPanel(radius: 18)
 
             HStack(spacing: 9) {
-                StudioMetric(title: "成功", value: String(model.progress.successCount), icon: "checkmark.circle")
+                StudioMetric(title: "成功", value: String(model.progress.successCount), icon: "checkmark.circle",
+                             color: StudioStyle.success)
                 StudioMetric(title: "失败", value: String(model.progress.failCount), icon: "xmark.circle",
                              color: model.progress.failCount > 0 ? StudioStyle.danger : StudioStyle.ink)
                 StudioMetric(title: "剩余", value: String(max(0, model.progress.target - model.progress.successCount)),

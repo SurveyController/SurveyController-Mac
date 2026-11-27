@@ -6,6 +6,7 @@ import SwiftUI
 struct AnswerConfigEditor: View {
     @Bindable var model: AppModel
     @State private var search = ""
+    @FocusState private var searchFocused: Bool
     @State private var problemsOnly = false
 
     var body: some View {
@@ -39,7 +40,9 @@ struct AnswerConfigEditor: View {
             }
             HStack(spacing: 7) {
                 Image(systemName: "magnifyingglass").foregroundStyle(StudioStyle.muted)
-                TextField("搜索题号或题目", text: $search).textFieldStyle(.plain)
+                TextField("搜索题号或题目", text: $search)
+                    .textFieldStyle(.plain)
+                    .focused($searchFocused)
                 if !search.isEmpty {
                     Button {
                         search = ""
@@ -51,7 +54,7 @@ struct AnswerConfigEditor: View {
                 }
             }
             .padding(9)
-            .background(StudioStyle.canvas, in: RoundedRectangle(cornerRadius: 9))
+            .studioField(focused: searchFocused)
             Picker("筛选题目", selection: $problemsOnly) {
                 Text("全部").tag(false)
                 Text("有问题").tag(true)
@@ -68,9 +71,9 @@ struct AnswerConfigEditor: View {
                             HStack(spacing: 8) {
                                 Text("\(question.displayNum ?? question.num)")
                                     .font(.caption.weight(.semibold).monospacedDigit())
-                                    .foregroundStyle(StudioStyle.accent)
+                                    .foregroundStyle(StudioStyle.badgeInk)
                                     .frame(minWidth: 25, minHeight: 25)
-                                    .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 7))
+                                    .background(StudioStyle.badge, in: RoundedRectangle(cornerRadius: 7))
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(question.title.isEmpty ? "未命名题目" : question.title)
                                         .font(.subheadline.weight(.medium))
@@ -288,7 +291,7 @@ struct AnswerConfigEditor: View {
             TextEditor(text: textCandidatesBinding(question))
                 .font(.system(.body, design: .monospaced))
                 .frame(minHeight: 90)
-                .border(Color(nsColor: .separatorColor))
+                .border(StudioStyle.border)
 
             if let index = entryIndex(questionNum: question.num) {
                 Toggle("使用自定义 AI 填空", isOn: $model.runtimeConfig.questionEntries[index].aiEnabled)

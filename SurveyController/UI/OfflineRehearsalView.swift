@@ -24,9 +24,12 @@ struct OfflineRehearsalView: View {
                 TextField("随机种子", text: $seedText)
                     .frame(width: 145)
                     .onSubmit(generate)
-                Button(report == nil ? "生成样例" : "重新生成", action: generate)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(Int(seedText) == nil || task != nil)
+                Button(action: generate) {
+                    Text(report == nil ? "生成样例" : "重新生成").studioActionLabel()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(StudioStyle.accent)
+                .disabled(Int(seedText) == nil || task != nil)
                 if task != nil {
                     ProgressView().controlSize(.small)
                 }
@@ -66,7 +69,7 @@ struct OfflineRehearsalView: View {
             }
         }
         .padding(22)
-        .background(StudioStyle.canvas)
+        .background(StudioStyle.sheet)
         .tint(StudioStyle.accent)
         .frame(minWidth: 590, idealWidth: 690, minHeight: 460, idealHeight: 560)
         .onDisappear { task?.cancel() }
@@ -85,10 +88,10 @@ struct OfflineRehearsalView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     questionButton(question.id, title: question.title)
                     Text(question.answer)
-                        .foregroundStyle(question.answered ? .primary : .secondary)
+                        .foregroundStyle(question.answered ? StudioStyle.ink : StudioStyle.muted)
                         .textSelection(.enabled)
                     ForEach(question.details, id: \.self) { detail in
-                        Text(detail).font(.caption).foregroundStyle(.secondary)
+                        Text(detail).font(.caption).foregroundStyle(StudioStyle.muted)
                     }
                 }
                 .padding(.vertical, 4)

@@ -25,6 +25,7 @@ enum AppPage: String, Hashable, Identifiable, CaseIterable {
 struct MainWindow: View {
     @State private var model = AppModel()
     @State private var selection: AppPage = .task
+    @State private var hoveredPage: AppPage?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -42,7 +43,10 @@ struct MainWindow: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(StudioStyle.canvas)
         }
+        .foregroundStyle(StudioStyle.ink, StudioStyle.muted)
         .tint(StudioStyle.accent)
+        .toolbarBackground(StudioStyle.toolbar, for: .windowToolbar)
+        .toolbarBackground(.visible, for: .windowToolbar)
         .navigationTitle("SurveyController")
         .frame(minWidth: 970, minHeight: 650)
         .overlay(alignment: .bottom) {
@@ -98,11 +102,12 @@ struct MainWindow: View {
         .padding(.horizontal, 14)
         .frame(width: 206)
         .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(StudioStyle.panel)
+        .background(StudioStyle.toolbar)
     }
 
     private func navigationItem(_ page: AppPage) -> some View {
         let selected = page == selection
+        let hovered = page == hoveredPage
         return Button {
             selection = page
         } label: {
@@ -112,13 +117,20 @@ struct MainWindow: View {
                 Spacer(minLength: 0)
             }
             .font(.system(size: 13, weight: selected ? .semibold : .medium))
-            .foregroundStyle(selected ? StudioStyle.accent : StudioStyle.muted)
+            .foregroundStyle(selected ? StudioStyle.accent : hovered ? StudioStyle.ink : StudioStyle.muted)
             .padding(.horizontal, 10)
             .frame(height: 39)
-            .background(selected ? StudioStyle.accentFill : .clear, in: RoundedRectangle(cornerRadius: 11))
+            .background(selected ? StudioStyle.accentFill : hovered ? StudioStyle.hover : .clear, in: RoundedRectangle(cornerRadius: 11))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { active in
+            if active {
+                hoveredPage = page
+            } else if hoveredPage == page {
+                hoveredPage = nil
+            }
+        }
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -130,8 +142,8 @@ struct MainWindow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(StudioStyle.panel, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(toastColor.opacity(0.35)))
+        .background(StudioStyle.popup, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(StudioStyle.border))
         .shadow(radius: 6)
         .padding(.bottom, 18)
         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -144,7 +156,7 @@ struct MainWindow: View {
     }
 
     private var toastColor: Color {
-        if model.toastMessage.contains("成功") || model.toastMessage.contains("完成") { return StudioStyle.accent }
+        if model.toastMessage.contains("成功") || model.toastMessage.contains("完成") { return StudioStyle.success }
         if model.toastMessage.contains("失败") || model.toastMessage.contains("错误") { return StudioStyle.danger }
         return StudioStyle.accent
     }

@@ -24,16 +24,16 @@ struct WizardStepBar: View {
                         }
                         .font(.system(size: 11, weight: .semibold))
                         .frame(width: 23, height: 23)
-                        .background(selected ? StudioStyle.accentFill : StudioStyle.raised, in: Circle())
+                        .background(selected ? StudioStyle.badge : StudioStyle.raised, in: Circle())
                         Text(step.title)
                             .font(.subheadline.weight(selected ? .semibold : .medium))
                             .lineLimit(1)
                     }
-                    .foregroundStyle(selected || complete ? StudioStyle.accent : StudioStyle.muted)
+                    .foregroundStyle(selected ? StudioStyle.accent : complete ? StudioStyle.success : StudioStyle.muted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 9)
                     .padding(.horizontal, 4)
-                    .background(selected ? StudioStyle.panel : .clear, in: RoundedRectangle(cornerRadius: 12))
+                    .background(selected ? StudioStyle.stepSelection : .clear, in: RoundedRectangle(cornerRadius: 12))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -43,6 +43,9 @@ struct WizardStepBar: View {
             }
         }
         .padding(5)
-        .background(StudioStyle.raised, in: RoundedRectangle(cornerRadius: 16))
+        .background(StudioStyle.toolbar, in: RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16).strokeBorder(StudioStyle.border).allowsHitTesting(false)
+        }
     }
 }

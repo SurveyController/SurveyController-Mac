@@ -58,9 +58,14 @@ struct AboutScreen: View {
                     .disabled(model.updateState == .checking)
 
                     if case .outdated(_, let url) = model.updateState {
-                        Button("前往下载") { model.openReleasePage(url) }
-                            .controlSize(.small)
-                            .buttonStyle(.borderedProminent)
+                        Button {
+                            model.openReleasePage(url)
+                        } label: {
+                            Text("前往下载").studioActionLabel()
+                        }
+                        .controlSize(.small)
+                        .buttonStyle(.borderedProminent)
+                        .tint(StudioStyle.accent)
                     }
                 }
             }
@@ -74,7 +79,7 @@ struct AboutScreen: View {
     private var versionBadge: some View {
         let text: (String, Color)? = {
             switch model.updateState {
-            case .latest: return ("最新", StudioStyle.accent)
+            case .latest: return ("最新", StudioStyle.success)
             case .outdated: return ("可更新", StudioStyle.warning)
             default: return ("v\(AppVersion.version)", .secondary)
             }
