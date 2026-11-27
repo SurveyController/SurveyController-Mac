@@ -6,6 +6,7 @@ import Foundation
 /// 单次运行的可变状态。
 public struct ExecutionState: @unchecked Sendable {
     public var config: ExecutionConfig
+    var reverseFillAnswers: [Int: AnswerAction] = [:]
     /// 已答题目记录：题号 → 已选选项下标（一致性规则用）
     public var answeredChoices: [Int: Set<Int>] = [:]
     /// 免费AI 预填充缓存：thread → (题号 → [String])

@@ -200,10 +200,11 @@ public final class RunEngine: @unchecked Sendable {
     public func start(
         config: ExecutionConfig,
         proxyPool: ProxyPool?,
-        submitHandler: @escaping SubmitHandler = { config, context in
-            try await WjxProvider.submit(config, context: context)
-        }
+        submitHandler: SubmitHandler? = nil
     ) {
+        let submit: SubmitHandler = submitHandler ?? { config, context in
+            try await ProviderRegistry.submit(config, context: context)
+        }
         let threadCount = min(max(1, config.numThreads), Self.maxThreads)
         queue.sync {
             guard runTask == nil else { return }
@@ -215,7 +216,7 @@ public final class RunEngine: @unchecked Sendable {
             pauseRequested = false
             consecutiveFailures = 0
             runTask = Task {
-                await self.run(threadCount: threadCount, config: config, proxyPool: proxyPool, submitHandler: submitHandler)
+                await self.run(threadCount: threadCount, config: config, proxyPool: proxyPool, submitHandler: submit)
             }
         }
     }
@@ -275,8 +276,15 @@ public final class RunEngine: @unchecked Sendable {
             } else {
                 leaseFactory = nil
             }
+            let sample = await config.reverseFill?.reserve()
+            if config.reverseFill != nil, sample == nil {
+                recordFailure(SurveyProviderUnavailableAtRuntimeError("可用的反填样本不足，已停止"), config: config)
+                break
+            }
+            var state = ExecutionState(config: config)
+            state.reverseFillAnswers = sample?.answers ?? [:]
             var context = WjxProvider.SubmitContext(
-                state: ExecutionState(config: config),
+                state: state,
                 threadName: threadName,
                 userAgent: profile?.ua ?? WjxSubmitCodec.resolveUserAgent(nil),
                 userAgentProfile: profile,
@@ -298,12 +306,16 @@ public final class RunEngine: @unchecked Sendable {
                     updateSlot(slot) { $0.success += 1; $0.status = "已成功" }
                     if let lease { await proxyPool?.markSuccess(lease) }
                 } else {
+                    if let sample { await config.reverseFill?.release(sample) }
                     queue.sync {
                         progress.claimedCount -= 1
                         wakeSubmissionWaiters()
                     }
                 }
             } catch {
+                if let sample, !(error is SubmissionResultUnknownError) {
+                    await config.reverseFill?.retryOnce(sample)
+                }
                 recordFailure(error, config: config)
                 updateSlot(slot) { $0.fail += 1; $0.status = "失败" }
                 if let lease {

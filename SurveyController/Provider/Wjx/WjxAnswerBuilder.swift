@@ -13,6 +13,10 @@ public enum WjxAnswerBuilder {
         threadName: String = "",
         rng: RandomSource = SystemRandomSource()
     ) throws -> AnswerAction? {
+        if let answer = state.reverseFillAnswers[question.num] {
+            state.recordChoice(questionNum: question.num, indices: Set(answer.selectedIndices))
+            return answer
+        }
         guard let configEntry = state.config.questionConfigIndexMap[question.num] else {
             return nil
         }

@@ -24,12 +24,17 @@ public final class AppModel {
         didSet {
             guard surveyUrl != oldValue else { return }
             runtimeConfig.url = surveyUrl
+            reverseFillSpec = nil
+            reverseFillURL = nil
             parseGeneration += 1
             parsePhase = .idle
             parseError = ""
         }
     }
     private var parseGeneration = 0
+    private(set) var reverseFillSpec: ReverseFillSpec?
+    private var reverseFillURL: URL?
+    private var reverseFillGeneration = 0
     public var parsePhase: SurveyParsePhase = .idle
     public var parseError: String = ""
     public var surveyTitle: String = ""
@@ -212,24 +217,18 @@ public final class AppModel {
             return
         }
         guard ProviderType.isSupportedSurveyUrl(url) else {
-            parseError = "仅支持问卷星 / 腾讯问卷 / 见数平台链接（当前 v0.1 仅实现问卷星提交链路）"
+            parseError = "仅支持问卷星、腾讯问卷和见数的公开问卷链接"
             parsePhase = .failed
             return
         }
         parsePhase = .parsing
         parseError = ""
         do {
-            let provider = ProviderType.detectProvider(url)
-            guard provider == .wjx else {
-                parseError = "该平台链路将在后续版本支持，v0.1 暂只支持问卷星"
-                parsePhase = .failed
-                return
-            }
-            let result = try await WjxProvider.parseSurvey(url: url)
+            let result = try await ProviderRegistry.parseSurvey(url)
             guard generation == parseGeneration else { return }
-            surveyProvider = provider
+            surveyProvider = result.provider
             surveyTitle = result.title
-            runtimeConfig.surveyProvider = provider
+            runtimeConfig.surveyProvider = result.provider
             runtimeConfig.surveyTitle = result.title
             runtimeConfig.questionsInfo = result.questions
             runtimeConfig.questionEntries = DefaultQuestionEntries.build(from: result.questions)
@@ -271,6 +270,27 @@ public final class AppModel {
         }
         if entries.isEmpty {
             report.errors.append("没有可用的作答配置")
+        }
+
+        if runtimeConfig.reverseFillEnabled {
+            if surveyProvider != .wjx {
+                report.errors.append("Excel 反填仅支持问卷星")
+            } else if let reverseFillSpec, !reverseFillSpec.samples.isEmpty {
+                if reverseFillSpec.samples.count < runtimeConfig.target {
+                    report.errors.append("反填样本少于目标份数")
+                }
+            } else {
+                report.errors.append("请先导入 Excel 文件并确认存在可反填的样本")
+            }
+        }
+        if surveyProvider == .credamo {
+            let window = runtimeConfig.answerDatetimeWindow
+            if !window.0.isEmpty || !window.1.isEmpty {
+                let times = answerDatetimeWindowToEpochMs([window.0, window.1])
+                if times.startMs <= 0 || times.endMs <= times.startMs {
+                    report.errors.append("见数作答日期窗口无效，请填写有效的起止时间")
+                }
+            }
         }
 
         let unsupported = questions.filter { $0.unsupported }
@@ -340,7 +360,11 @@ public final class AppModel {
         logs.removeAll()
         goToStep(.run)
 
-        let execution = ExecutionConfigBuilder.build(from: snapshot)
+        var execution = ExecutionConfigBuilder.build(from: snapshot)
+        if snapshot.reverseFillEnabled, let reverseFillSpec {
+            execution.reverseFill = ReverseFillRuntime(reverseFillSpec)
+            execution.numThreads = max(1, snapshot.reverseFillThreads)
+        }
 
         var pool: ProxyPool? = nil
         if execution.randomProxyIpEnabled {
@@ -612,6 +636,36 @@ public final class AppModel {
         }
     }
 
+    func loadReverseFill(from url: URL) async {
+        let generation = parseGeneration
+        reverseFillGeneration += 1
+        let loadGeneration = reverseFillGeneration
+        let questions = runtimeConfig.questionsInfo
+        let entries = runtimeConfig.questionEntries
+        let format = runtimeConfig.reverseFillFormat
+        let startRow = runtimeConfig.reverseFillStartRow
+        do {
+            let spec = try await Task.detached(priority: .userInitiated) {
+                let rows = try XlsxReader.read(url)
+                return ReverseFillSpec.build(rows: rows, questions: questions, entries: entries, format: format, startRow: startRow)
+            }.value
+            guard generation == parseGeneration, loadGeneration == reverseFillGeneration else { return }
+            reverseFillURL = url
+            reverseFillSpec = spec
+            runtimeConfig.reverseFillSourcePath = url.path
+            runtimeConfig.reverseFillEnabled = !spec.samples.isEmpty
+            if !spec.samples.isEmpty { runtimeConfig.target = spec.samples.count }
+        } catch {
+            guard generation == parseGeneration, loadGeneration == reverseFillGeneration else { return }
+            showToast(error.localizedDescription)
+        }
+    }
+
+    func reloadReverseFill() async {
+        guard let url = reverseFillURL else { return }
+        await loadReverseFill(from: url)
+    }
+
     public func exportConfig(to url: URL) {
         do {
             let payload = ConfigCodec.serializeRuntimeConfig(runtimeConfig)
@@ -638,6 +692,8 @@ public final class AppModel {
             surveyProvider = config.surveyProvider
             parsePhase = config.questionsInfo.isEmpty ? .idle : .ready
             parseGeneration += 1
+            reverseFillSpec = nil
+            reverseFillURL = nil
             Self.lastConfigPath = url
             appendLog("配置已导入：\(url.lastPathComponent)")
         } catch {
