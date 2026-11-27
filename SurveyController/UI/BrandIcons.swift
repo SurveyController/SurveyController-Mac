@@ -254,7 +254,7 @@ struct FeedbackIcon: View {
     var body: some View {
         ZStack {
             BubbleShape()
-                .fill(Color.accentColor.opacity(0.9))
+                .fill(StudioStyle.accent.opacity(0.9))
             VStack(spacing: size * 0.05) {
                 Capsule().fill(.white).frame(width: size * 0.08, height: size * 0.28)
                 Circle().fill(.white).frame(width: size * 0.09, height: size * 0.09)
@@ -287,13 +287,13 @@ struct DocsIcon: View {
     var body: some View {
         ZStack {
             BookShape()
-                .stroke(Color.accentColor, lineWidth: size * 0.07)
-                .background(BookShape().fill(Color.accentColor.opacity(0.12)))
+                .stroke(StudioStyle.accent, lineWidth: size * 0.07)
+                .background(BookShape().fill(StudioStyle.accent.opacity(0.12)))
             Path { p in
                 p.move(to: CGPoint(x: size * 0.5, y: size * 0.22))
                 p.addLine(to: CGPoint(x: size * 0.5, y: size * 0.86))
             }
-            .stroke(Color.accentColor, lineWidth: size * 0.07)
+            .stroke(StudioStyle.accent, lineWidth: size * 0.07)
         }
         .frame(width: size, height: size)
     }
@@ -342,8 +342,7 @@ struct LinkRow<Icon: View>: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.background))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.quinary))
+        .studioPanel(radius: 12)
     }
 }
 

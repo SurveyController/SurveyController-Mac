@@ -8,29 +8,25 @@ struct WizardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            WizardStepBar(
-                steps: AppModel.WizardStep.allCases,
-                current: Binding(
-                    get: { model.wizardStep },
-                    set: { model.goToStep($0) }
-                ),
-                maxReached: model.maxReachedStep
-            ) { step in
-                if !model.isRunning {
-                    model.goToStep(step)
+            VStack(alignment: .leading, spacing: 12) {
+                if model.wizardStep != .survey {
+                    StudioHeading(title: model.wizardStep.workspaceTitle, subtitle: model.surveyTitle.isEmpty ? nil : model.surveyTitle)
                 }
+                WizardStepBar(current: model.wizardStep, maxReached: model.maxReachedStep,
+                              running: model.isRunning, onSelect: model.goToStep)
             }
-            .padding(.vertical, 18)
-            .padding(.horizontal, 24)
-            .background(Color(nsColor: .windowBackgroundColor))
-
-            Divider()
+            .padding(.horizontal, 26)
+            .padding(.top, 19)
+            .padding(.bottom, 12)
 
             stepContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Divider()
-            navBar
+            if model.wizardStep != .survey {
+                Rectangle().fill(StudioStyle.border).frame(height: 1)
+                navBar
+                    .background(StudioStyle.panel)
+            }
         }
     }
 
@@ -48,12 +44,21 @@ struct WizardView: View {
 
     private var navBar: some View {
         HStack {
-            Button("上一步") { model.previousStep() }
-                .disabled(model.wizardStep == .survey || model.isRunning)
+            if model.wizardStep != .survey {
+                Button {
+                    model.previousStep()
+                } label: {
+                    Label("上一步", systemImage: "chevron.left")
+                }
+                .disabled(model.isRunning)
+            }
             Spacer()
-            Text(stepHint)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if model.wizardStep == .check {
+                Label(model.preflight.errors.isEmpty ? "配置检查通过" : "有待修复的配置",
+                      systemImage: model.preflight.errors.isEmpty ? "checkmark.circle" : "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(StudioStyle.muted)
+            }
             Spacer()
             if model.wizardStep == .run {
                 if model.isRunning {
@@ -84,31 +89,31 @@ struct WizardView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(!model.canStart || !model.preflight.errors.isEmpty)
                 }
-            } else {
-                Button(model.wizardStep == .check ? "进入运行" : "下一步") {
-                    if model.wizardStep == .survey, model.parsePhase != .ready {
-                        Task { await model.parseSurvey() }
-                    } else {
-                        model.nextStep()
-                    }
+            } else if model.wizardStep != .survey {
+                Button {
+                    model.nextStep()
+                } label: {
+                    Label(model.wizardStep == .check ? "进入运行" : "下一步", systemImage: "chevron.right")
                 }
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
-                .disabled(model.wizardStep == .survey && (model.isRunning || model.surveyUrl.trimmingCharacters(in: .whitespaces).isEmpty))
             }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 14)
     }
 
-    private var stepHint: String {
-        switch model.wizardStep {
-        case .survey: return "粘贴问卷链接或导入已有配置，解析成功自动进入下一步"
-        case .answers: return "调整各题的答案分布，不改则使用默认均匀随机"
-        case .task: return "建议先用 3~5 份验证配置，无误后再放量"
-        case .network: return "直连提交多份容易触发智能验证，建议启用随机 IP"
-        case .check: return model.preflight.errors.isEmpty ? "检查通过，可以开始运行" : "存在需要先解决的问题"
-        case .run: return "运行中可随时停止；触发智能验证的 IP 会自动冷却更换"
+}
+
+private extension AppModel.WizardStep {
+    var workspaceTitle: String {
+        switch self {
+        case .survey: "问卷工作台"
+        case .answers: "题目编辑器"
+        case .task: "运行参数"
+        case .network: "连接设置"
+        case .check: "配置检查"
+        case .run: "运行控制台"
         }
     }
 }
@@ -119,76 +124,152 @@ struct SurveyStepView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Button("读取二维码图片…") { importQRImage() }
-                    .disabled(model.isRunning)
-                Button("导入已有配置…") { importConfig() }
-                    .disabled(model.isRunning)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-
-            Spacer()
-            VStack(spacing: 20) {
-                ZStack {
-                    Circle()
-                        .fill(.quinary)
-                        .frame(width: 92, height: 92)
-                    Circle()
-                        .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 2)
-                        .frame(width: 92, height: 92)
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 38))
-                        .foregroundStyle(.tint)
-                }
-                Text("添加要填写的问卷")
-                    .font(.title2.bold())
-                Text("粘贴问卷链接或读取二维码，解析成功后自动进入答案配置")
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 10) {
-                    Image(systemName: "link")
-                        .foregroundStyle(.tertiary)
-                    TextField("问卷链接", text: $model.surveyUrl)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 430)
-                        .disabled(model.isRunning)
-                        .onSubmit { Task { await model.parseSurvey() } }
-                    if let clipboardUrl = model.clipboardSurveyUrl, clipboardUrl != model.surveyUrl {
-                        Button {
-                            model.surveyUrl = clipboardUrl
-                        } label: {
-                            Label("粘贴", systemImage: "doc.on.clipboard")
-                        }
-                    }
-                    if model.parsePhase == .parsing {
-                        ProgressView().controlSize(.small)
-                    }
-                }
-
+        ScrollView {
+            VStack(alignment: .leading, spacing: 17) {
+                hero
                 if model.parsePhase == .failed {
-                    Label(model.parseError, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                        .frame(maxWidth: 520)
+                    Label(model.parseError, systemImage: "exclamationmark.circle.fill")
+                        .foregroundStyle(StudioStyle.danger)
+                        .padding(15)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .studioPanel(radius: 13)
                 }
                 if model.parsePhase == .ready {
-                    HStack(spacing: 12) {
-                        Label("已解析：\(model.surveyTitle)（\(model.runtimeConfig.questionsInfo.count) 题）",
-                              systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        if let url = URL(string: model.surveyUrl), url.scheme != nil {
-                            Link(destination: url) {
-                                Label("查看问卷", systemImage: "safari")
-                                    .font(.caption)
-                            }
+                    currentSurvey
+                }
+                HStack(spacing: 13) {
+                    sourceButton("从二维码图片导入", detail: "读取图片里的问卷链接", icon: "qrcode", action: importQRImage)
+                    sourceButton("导入配置", detail: "恢复已保存的 JSON 配置", icon: "tray.and.arrow.down", action: importConfig)
+                }
+                .disabled(model.isRunning)
+            }
+            .padding(.horizontal, 26)
+            .padding(.top, 8)
+            .padding(.bottom, 26)
+            .frame(maxWidth: 1040)
+        }
+    }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 19) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("问卷工作台")
+                        .font(.system(size: 36, weight: .bold))
+                        .accessibilityAddTraits(.isHeader)
+                    Text("输入问卷链接，解析题目后即可编辑和离线试跑。")
+                        .font(.subheadline)
+                        .foregroundStyle(StudioStyle.muted)
+                }
+                Spacer()
+                Image(systemName: "list.bullet.clipboard")
+                    .font(.system(size: 31, weight: .medium))
+                    .foregroundStyle(StudioStyle.accent)
+                    .frame(width: 59, height: 59)
+                    .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 19))
+                    .accessibilityHidden(true)
+            }
+            HStack(spacing: 9) {
+                HStack(spacing: 10) {
+                    Image(systemName: "link").foregroundStyle(StudioStyle.muted)
+                    TextField("粘贴问卷链接", text: $model.surveyUrl)
+                        .textFieldStyle(.plain)
+                        .onSubmit(openSurvey)
+                        .foregroundStyle(StudioStyle.ink)
+                        .disabled(model.isRunning)
+                    if let link = model.clipboardSurveyUrl, link != model.surveyUrl {
+                        Button {
+                            model.surveyUrl = link
+                        } label: {
+                            Image(systemName: "doc.on.clipboard")
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(StudioStyle.accent)
+                        .help("粘贴剪贴板中的问卷链接")
+                        .accessibilityLabel("粘贴问卷链接")
                     }
                 }
+                .padding(.horizontal, 13)
+                .frame(height: 43)
+                .background(StudioStyle.canvas, in: RoundedRectangle(cornerRadius: 12))
+                Button(action: openSurvey) {
+                    HStack(spacing: 8) {
+                        if model.parsePhase == .parsing {
+                            ProgressView().controlSize(.small)
+                        }
+                        Text(model.parsePhase == .parsing ? "正在解析" : "解析问卷")
+                        if model.parsePhase != .parsing { Image(systemName: "arrow.right") }
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(canParse ? StudioStyle.onAccent : StudioStyle.muted)
+                    .padding(.horizontal, 13)
+                    .frame(height: 43)
+                    .background(canParse ? StudioStyle.accent : StudioStyle.raised, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canParse)
+            }
+            Label("问卷星 · 腾讯问卷 · Credamo 见数", systemImage: "link")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(StudioStyle.muted)
+        }
+        .foregroundStyle(StudioStyle.ink)
+        .padding(27)
+        .studioPanel(radius: 21)
+    }
+
+    private var canParse: Bool {
+        !model.isRunning && model.parsePhase != .parsing
+            && !model.surveyUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var currentSurvey: some View {
+        HStack(spacing: 13) {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(StudioStyle.accent)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(model.surveyTitle.isEmpty ? "已解析问卷" : model.surveyTitle)
+                    .font(.subheadline.weight(.semibold)).lineLimit(2)
+                Text("\(model.runtimeConfig.questionsInfo.count) 题 · \(model.providerLabel)")
+                    .font(.caption).foregroundStyle(StudioStyle.muted)
             }
             Spacer()
+            if let url = URL(string: model.surveyUrl), url.scheme != nil {
+                Link("查看问卷", destination: url)
+            }
+            Button("继续编辑") { model.goToStep(.answers) }
+                .buttonStyle(.borderedProminent)
         }
+        .padding(16)
+        .studioPanel()
+    }
+
+    private func sourceButton(_ title: String, detail: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(StudioStyle.accent)
+                    .frame(width: 42, height: 42)
+                    .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Text(detail).font(.caption).foregroundStyle(StudioStyle.muted)
+                }
+                Spacer(minLength: 3)
+                Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(StudioStyle.accent)
+            }
+            .foregroundStyle(StudioStyle.ink)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .studioPanel()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func openSurvey() {
+        guard canParse else { return }
+        Task { await model.parseSurvey() }
     }
 
     private func importQRImage() {
@@ -301,8 +382,9 @@ struct TaskStepView: View {
                     Toggle("连续失败 5 份自动停止", isOn: $model.runtimeConfig.failStopEnabled)
                 }
             }
-            .padding(24)
-            .frame(maxWidth: 760, alignment: .leading)
+            .padding(.horizontal, 26)
+            .padding(.vertical, 8)
+            .frame(maxWidth: 940, alignment: .leading)
         }
     }
     private var reverseFillCard: some View {
@@ -428,8 +510,9 @@ struct NetworkStepView: View {
                     }
                 }
             }
-            .padding(24)
-            .frame(maxWidth: 760, alignment: .leading)
+            .padding(.horizontal, 26)
+            .padding(.vertical, 8)
+            .frame(maxWidth: 940, alignment: .leading)
         }
         .task { await model.syncQuotaFromServer(silent: true) }
     }
@@ -513,23 +596,38 @@ struct CheckStepView: View {
         let report = model.preflight
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
+                HStack(spacing: 13) {
+                    Image(systemName: "checklist")
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(StudioStyle.accent)
+                        .frame(width: 48, height: 48)
+                        .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 14))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("离线试跑").font(.headline)
+                        Text("在本机预览最多 20 份答案和选项分布。")
+                            .font(.subheadline).foregroundStyle(StudioStyle.muted)
+                    }
                     Spacer()
                     Button {
                         showingRehearsal = true
                     } label: {
-                        Label("离线试跑", systemImage: "checklist")
+                        Label("离线试跑", systemImage: "play.circle")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.vertical, 9)
+                            .padding(.horizontal, 12)
+                            .foregroundStyle(model.canStart ? StudioStyle.onAccent : StudioStyle.muted)
+                            .background(model.canStart ? StudioStyle.accent : StudioStyle.raised, in: RoundedRectangle(cornerRadius: 10))
                     }
+                    .buttonStyle(.plain)
                     .disabled(!model.canStart)
-                    Button {
-                        exportConfig()
-                    } label: {
-                        Label("导出配置", systemImage: "square.and.arrow.up")
-                    }
-                    .controlSize(.small)
                 }
+                .foregroundStyle(StudioStyle.ink)
+                .padding(17)
+                .studioPanel(radius: 17)
+
                 CardView(title: "配置摘要") {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 10) {
                         ForEach(Array(report.summary.enumerated()), id: \.offset) { _, line in
                             Label(line, systemImage: "checkmark.circle")
                                 .foregroundStyle(.secondary)
@@ -550,24 +648,32 @@ struct CheckStepView: View {
                                     .buttonStyle(.link)
                                 } else {
                                     Label(line, systemImage: "xmark.octagon.fill")
-                                        .foregroundStyle(.red)
+                                        .foregroundStyle(StudioStyle.danger)
                                 }
                             }
                         }
                     }
                 }
 
-                CardView(title: "提示") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(report.warnings.enumerated()), id: \.offset) { _, line in
-                            Label(line, systemImage: "exclamationmark.triangle")
-                                .foregroundStyle(.orange)
+                if !report.warnings.isEmpty {
+                    CardView(title: "建议检查") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array(report.warnings.enumerated()), id: \.offset) { _, line in
+                                Label(line, systemImage: "exclamationmark.triangle")
+                                    .foregroundStyle(StudioStyle.warning)
+                            }
                         }
                     }
                 }
+                Button {
+                    exportConfig()
+                } label: {
+                    Label("导出配置", systemImage: "square.and.arrow.up")
+                }
             }
-            .padding(24)
-            .frame(maxWidth: 720, alignment: .leading)
+            .padding(.horizontal, 26)
+            .padding(.vertical, 8)
+            .frame(maxWidth: 940, alignment: .leading)
         }
         .sheet(isPresented: $showingRehearsal) {
             OfflineRehearsalView(model: model)
@@ -591,54 +697,81 @@ struct RunStepView: View {
     let model: AppModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 16) {
-                ProgressView(value: Double(model.progress.successCount), total: Double(max(model.progress.target, 1)))
-                    .frame(maxWidth: .infinity)
-                Text("\(model.progress.successCount)/\(model.progress.target)")
-                    .monospacedDigit()
-                    .frame(width: 80, alignment: .trailing)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 14)
-
-            HStack(spacing: 14) {
-                Label("成功 \(model.progress.successCount)", systemImage: "checkmark.circle").foregroundStyle(.green)
-                Label("失败 \(model.progress.failCount)", systemImage: "xmark.circle")
-                    .foregroundStyle(model.progress.failCount > 0 ? .red : .secondary)
-                ForEach(model.progress.failureReasons.sorted(by: { $0.value > $1.value }).prefix(3), id: \.key) { reason, count in
-                    Text("\(reason)×\(count)")
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.red.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.red)
+        VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: 13) {
+                HStack {
+                    Label(phaseTitle, systemImage: "waveform.path")
+                        .font(.headline)
+                    Spacer()
+                    Text("\(model.progress.successCount) / \(model.progress.target)")
+                        .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                        .contentTransition(.numericText())
                 }
-                Spacer()
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-
-            if !model.progress.slots.isEmpty && model.isRunning {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 8) {
-                    ForEach(model.progress.slots) { slot in
-                        VStack(spacing: 2) {
-                            Text(slot.status).font(.caption)
-                            Text("\(slot.success)✓ \(slot.fail)✗")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                .foregroundStyle(StudioStyle.ink)
+                GeometryReader { geometry in
+                    let fraction = Double(model.progress.successCount) / Double(max(1, model.progress.target))
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(StudioStyle.raised)
+                        Capsule().fill(StudioStyle.accent)
+                            .frame(width: max(0, min(1, fraction)) * geometry.size.width)
                     }
                 }
-                .padding(.horizontal, 20)
+                .frame(height: 7)
+                .accessibilityLabel("完成进度")
+                .accessibilityValue("\(model.progress.successCount) 份，共 \(model.progress.target) 份")
+            }
+            .padding(17)
+            .studioPanel(radius: 18)
+
+            HStack(spacing: 9) {
+                StudioMetric(title: "成功", value: String(model.progress.successCount), icon: "checkmark.circle")
+                StudioMetric(title: "失败", value: String(model.progress.failCount), icon: "xmark.circle",
+                             color: model.progress.failCount > 0 ? StudioStyle.danger : StudioStyle.ink)
+                StudioMetric(title: "剩余", value: String(max(0, model.progress.target - model.progress.successCount)),
+                             icon: "hourglass", color: StudioStyle.ink)
             }
 
-            Divider().padding(.top, 10)
-            LogsScreen(model: model)
+            if !model.progress.failureReasons.isEmpty {
+                HStack(spacing: 7) {
+                    ForEach(model.progress.failureReasons.sorted(by: { $0.value > $1.value }).prefix(3), id: \.key) { reason, count in
+                        Text("\(reason) × \(count)")
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(StudioStyle.danger.opacity(0.12), in: Capsule())
+                            .foregroundStyle(StudioStyle.danger)
+                    }
+                }
+            }
+
+            if !model.progress.slots.isEmpty && model.isRunning {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 7) {
+                        ForEach(model.progress.slots) { slot in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(slot.status).font(.caption.weight(.semibold))
+                                Text("\(slot.success) 成功 · \(slot.fail) 失败")
+                                    .font(.caption2.monospacedDigit()).foregroundStyle(StudioStyle.muted)
+                            }
+                            .padding(8)
+                            .studioPanel(radius: 9)
+                        }
+                    }
+                }
+            }
+
+            LogsScreen(model: model, embedded: true)
+                .frame(minHeight: 120)
         }
+        .padding(.horizontal, 26)
+        .padding(.top, 4)
+        .padding(.bottom, 14)
+    }
+
+    private var phaseTitle: String {
+        if model.progress.phase == .paused { return "已暂停" }
+        if model.isRunning { return "任务运行中" }
+        if model.progress.target > 0 && model.progress.successCount >= model.progress.target { return "已达成目标" }
+        return "任务进度"
     }
 }

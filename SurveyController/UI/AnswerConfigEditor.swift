@@ -5,44 +5,106 @@ import SwiftUI
 
 struct AnswerConfigEditor: View {
     @Bindable var model: AppModel
+    @State private var search = ""
+    @State private var problemsOnly = false
 
     var body: some View {
         HSplitView {
             questionList
-                .frame(minWidth: 240, idealWidth: 280)
+                .frame(minWidth: 242, idealWidth: 282)
             editorPane
                 .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
         }
+        .padding(.horizontal, 26)
+        .padding(.top, 4)
+        .padding(.bottom, 16)
     }
 
-    // MARK: - 题目列表
-
     private var questionList: some View {
-        List(selection: $model.selectedQuestionIndex) {
-            ForEach(Array(model.runtimeConfig.questionsInfo.enumerated()), id: \.offset) { index, question in
-                HStack(spacing: 8) {
-                    Text("\(question.displayNum ?? question.num)")
-                        .monospacedDigit()
-                        .frame(width: 26, alignment: .trailing)
-                        .foregroundStyle(.secondary)
-                    Text(entryLabel(question))
-                        .font(.caption)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-                    Text(question.title)
-                        .lineLimit(1)
-                    Spacer()
-                    if question.required {
-                        Image(systemName: "asterisk")
-                            .font(.caption2)
-                            .foregroundStyle(.red)
+        let questions = model.runtimeConfig.questionsInfo
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let issues = Set(model.preflight.questionTargets.values)
+        let entries = questions.enumerated().filter { _, question in
+            let number = String(question.displayNum ?? question.num)
+            let matching = query.isEmpty || number == query || question.title.localizedCaseInsensitiveContains(query)
+            return matching && (!problemsOnly || issues.contains(question.num))
+        }
+
+        return VStack(alignment: .leading, spacing: 11) {
+            HStack {
+                Text("题目").font(.headline)
+                Spacer()
+                Text("\(entries.count)/\(questions.count)").font(.caption.monospacedDigit())
+                    .foregroundStyle(StudioStyle.muted)
+            }
+            HStack(spacing: 7) {
+                Image(systemName: "magnifyingglass").foregroundStyle(StudioStyle.muted)
+                TextField("搜索题号或题目", text: $search).textFieldStyle(.plain)
+                if !search.isEmpty {
+                    Button {
+                        search = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("清空搜索")
                 }
-                .tag(index)
+            }
+            .padding(9)
+            .background(StudioStyle.canvas, in: RoundedRectangle(cornerRadius: 9))
+            Picker("筛选题目", selection: $problemsOnly) {
+                Text("全部").tag(false)
+                Text("有问题").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            if entries.isEmpty {
+                ContentUnavailableView("找不到题目", systemImage: "magnifyingglass", description: Text("试试别的关键词或筛选条件"))
+                    .frame(maxHeight: .infinity)
+            } else {
+                ScrollViewReader { proxy in
+                    List(selection: $model.selectedQuestionIndex) {
+                        ForEach(entries, id: \.offset) { index, question in
+                            HStack(spacing: 8) {
+                                Text("\(question.displayNum ?? question.num)")
+                                    .font(.caption.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(StudioStyle.accent)
+                                    .frame(minWidth: 25, minHeight: 25)
+                                    .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 7))
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(question.title.isEmpty ? "未命名题目" : question.title)
+                                        .font(.subheadline.weight(.medium))
+                                        .lineLimit(1)
+                                    Text(entryLabel(question))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
+                                if issues.contains(question.num) {
+                                    Image(systemName: "exclamationmark.circle")
+                                        .foregroundStyle(StudioStyle.warning)
+                                        .accessibilityLabel("配置需检查")
+                                } else if question.required {
+                                    Image(systemName: "asterisk")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityLabel("必答")
+                                }
+                            }
+                            .padding(.vertical, 4)
+                            .tag(index)
+                            .id(index)
+                        }
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .onAppear { proxy.scrollTo(model.selectedQuestionIndex) }
+                    .onChange(of: model.selectedQuestionIndex) { _, index in proxy.scrollTo(index) }
+                }
             }
         }
-        .listStyle(.sidebar)
+        .padding(13)
+        .studioPanel(radius: 16)
     }
 
     private func entryLabel(_ question: SurveyQuestionMeta) -> String {
@@ -65,13 +127,17 @@ struct AnswerConfigEditor: View {
             let question = questions[model.selectedQuestionIndex]
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("第\(question.displayNum ?? question.num)题 · \(question.title)")
-                        .font(.title3.bold())
-                    editor(for: question)
+                    StudioHeading(
+                        title: question.title.isEmpty ? "未命名题目" : question.title,
+                        subtitle: "第 \(question.displayNum ?? question.num) 题 · \(entryLabel(question))"
+                    )
+                    CardView(title: "答案配置") { editor(for: question) }
                     answerStrategy(for: question)
                 }
-                .padding(20)
-                .frame(maxWidth: 720, alignment: .leading)
+                .padding(.leading, 12)
+                .padding(.trailing, 2)
+                .padding(.bottom, 4)
+                .frame(maxWidth: 900, alignment: .leading)
             }
             .id(question.num)
         }
@@ -124,7 +190,7 @@ struct AnswerConfigEditor: View {
             if question.forcedOptionIndex != nil {
                 Label("题目要求固定选择「\(question.forcedOptionText)」，权重不生效", systemImage: "pin")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(StudioStyle.warning)
             }
         }
     }
