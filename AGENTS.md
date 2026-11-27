@@ -90,6 +90,7 @@ mac/
 │   ├── Data/                         # 配置编解码、存储（对标 core/config/ + app/config.py）
 │   └── UI/                           # SwiftUI 界面（重写，不移植 software/ui/）
 ├── SurveyControllerTests/            # 单元测试（对标 CI/unit_tests/）
+├── static/screenshot/               # README 界面截图
 └── .github/workflows/                # ci.yml + release.yml
 ```
 

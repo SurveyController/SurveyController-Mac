@@ -3,61 +3,123 @@
 import SwiftUI
 
 enum AppPage: String, Hashable, Identifiable, CaseIterable {
-    case task = "任务"
+    case task = "工作台"
     case settings = "设置"
     case community = "社区"
     case logs = "日志"
-    case about = "更多"
+    case about = "关于"
 
     var id: String { rawValue }
 
     var systemImage: String {
         switch self {
-        case .task: return "house"
+        case .task: return "square.grid.2x2"
         case .settings: return "gearshape"
         case .community: return "bubble.left.and.bubble.right"
         case .logs: return "doc.text"
-        case .about: return "ellipsis.circle"
+        case .about: return "info.circle"
         }
     }
 }
 
 struct MainWindow: View {
     @State private var model = AppModel()
-    @State private var selection: AppPage? = .task
+    @State private var selection: AppPage = .task
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selection) {
-                Section {
-                    Label(AppPage.task.rawValue, systemImage: AppPage.task.systemImage)
-                        .tag(AppPage.task)
-                }
-                Section("更多") {
-                    ForEach([AppPage.settings, .community, .logs, .about]) { page in
-                        Label(page.rawValue, systemImage: page.systemImage)
-                            .tag(page)
-                    }
+        HStack(spacing: 0) {
+            sidebar
+            Rectangle().fill(StudioStyle.border).frame(width: 1)
+            Group {
+                switch selection {
+                case .task: WizardView(model: model)
+                case .settings: SettingsScreen(model: model)
+                case .community: CommunityScreen()
+                case .logs: LogsScreen(model: model)
+                case .about: AboutScreen(model: model)
                 }
             }
-            .navigationSplitViewColumnWidth(min: 160, ideal: 180)
-        } detail: {
-            switch selection {
-            case .task: WizardView(model: model)
-            case .settings: SettingsScreen(model: model)
-            case .community: CommunityScreen()
-            case .logs: LogsScreen(model: model)
-            case .about: AboutScreen(model: model)
-            case nil: WizardView(model: model)
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(StudioStyle.canvas)
         }
-        .navigationTitle("SurveyController \(AppVersion.version)")
-        .frame(minWidth: 960, minHeight: 640)
+        .tint(StudioStyle.accent)
+        .navigationTitle("SurveyController")
+        .frame(minWidth: 970, minHeight: 650)
         .overlay(alignment: .bottom) {
             if !model.toastMessage.isEmpty {
                 toastView
             }
         }
+    }
+
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 10) {
+                StudioMark()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("SurveyController").font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.92)
+                        .foregroundStyle(StudioStyle.ink)
+                    Text("macOS").font(.caption).foregroundStyle(StudioStyle.muted)
+                }
+            }
+            .padding(.horizontal, 6)
+
+            VStack(alignment: .leading, spacing: 5) {
+                navigationItem(.task)
+                navigationItem(.logs)
+                navigationItem(.settings)
+                navigationItem(.community)
+                navigationItem(.about)
+            }
+
+            Spacer()
+
+            if model.isRunning {
+                Button {
+                    selection = .task
+                } label: {
+                    Label(model.progress.phase == .paused ? "任务已暂停" : "任务运行中", systemImage: "waveform.path")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(StudioStyle.accent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(11)
+                        .background(StudioStyle.accentFill, in: RoundedRectangle(cornerRadius: 11))
+                }
+                .buttonStyle(.plain)
+            }
+            Text("版本 \(AppVersion.version)")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(StudioStyle.muted)
+                .padding(.horizontal, 8)
+        }
+        .padding(.vertical, 22)
+        .padding(.horizontal, 14)
+        .frame(width: 206)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(StudioStyle.panel)
+    }
+
+    private func navigationItem(_ page: AppPage) -> some View {
+        let selected = page == selection
+        return Button {
+            selection = page
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: page.systemImage).frame(width: 21)
+                Text(page.rawValue)
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 13, weight: selected ? .semibold : .medium))
+            .foregroundStyle(selected ? StudioStyle.accent : StudioStyle.muted)
+            .padding(.horizontal, 10)
+            .frame(height: 39)
+            .background(selected ? StudioStyle.accentFill : .clear, in: RoundedRectangle(cornerRadius: 11))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var toastView: some View {
@@ -68,7 +130,7 @@ struct MainWindow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .background(StudioStyle.panel, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(toastColor.opacity(0.35)))
         .shadow(radius: 6)
         .padding(.bottom, 18)
@@ -82,9 +144,9 @@ struct MainWindow: View {
     }
 
     private var toastColor: Color {
-        if model.toastMessage.contains("成功") || model.toastMessage.contains("完成") { return .green }
-        if model.toastMessage.contains("失败") || model.toastMessage.contains("错误") { return .red }
-        return .accentColor
+        if model.toastMessage.contains("成功") || model.toastMessage.contains("完成") { return StudioStyle.accent }
+        if model.toastMessage.contains("失败") || model.toastMessage.contains("错误") { return StudioStyle.danger }
+        return StudioStyle.accent
     }
 }
 

@@ -4,13 +4,12 @@
 import SwiftUI
 
 struct CommunityScreen: View {
-    private let columns = [GridItem(.adaptive(minimum: 420), spacing: 16)]
+    private let columns = [GridItem(.adaptive(minimum: 330), spacing: 13)]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("社区")
-                    .font(.system(size: 26, weight: .bold))
+                StudioHeading(title: "社区", subtitle: "参与讨论、报告问题或为项目贡献代码。", icon: "bubble.left.and.bubble.right")
 
                 LazyVGrid(columns: columns, spacing: 16) {
                     qqCard
@@ -18,15 +17,10 @@ struct CommunityScreen: View {
                     contributeCard
                     licenseCard
                 }
-
-                Text("欢迎加入社区，一起让这个项目变得更好")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
             }
             .padding(28)
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+
     }
 
     // MARK: - QQ 群
@@ -168,8 +162,7 @@ struct CommunityCard<Icon: View, Content: View>: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, minHeight: 200, alignment: .topLeading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.quinary))
+        .studioPanel()
     }
 }
 

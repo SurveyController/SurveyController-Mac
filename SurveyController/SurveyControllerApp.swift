@@ -9,5 +9,6 @@ struct SurveyControllerApp: App {
             MainWindow()
         }
         .windowResizability(.contentMinSize)
+        .defaultSize(width: 1160, height: 780)
     }
 }

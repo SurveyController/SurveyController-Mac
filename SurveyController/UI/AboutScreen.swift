@@ -7,16 +7,16 @@ struct AboutScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 16) {
+                StudioHeading(title: "关于", icon: "info.circle")
                 header
                 disclaimer
                 linksSection
                 licenseSection
             }
             .padding(28)
-            .frame(maxWidth: 640, alignment: .leading)
+            .frame(maxWidth: 930, alignment: .leading)
         }
-        .background(Color(nsColor: .controlBackgroundColor))
         .task {
             if case .idle = model.updateState {
                 await model.checkForUpdates()
@@ -28,18 +28,7 @@ struct AboutScreen: View {
 
     private var header: some View {
         HStack(spacing: 18) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(
-                        LinearGradient(colors: [.accentColor.opacity(0.8), .accentColor],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-                    .frame(width: 72, height: 72)
-                    .shadow(color: .accentColor.opacity(0.25), radius: 5, y: 2)
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.system(size: 34, weight: .medium))
-                    .foregroundStyle(.white)
-            }
+            StudioMark(size: 62)
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
                     Text("SurveyController for Mac")
@@ -78,16 +67,15 @@ struct AboutScreen: View {
             Spacer()
         }
         .padding(20)
-        .background(.background, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.quinary))
+        .studioPanel()
     }
 
     @ViewBuilder
     private var versionBadge: some View {
         let text: (String, Color)? = {
             switch model.updateState {
-            case .latest: return ("最新", .green)
-            case .outdated: return ("可更新", .orange)
+            case .latest: return ("最新", StudioStyle.accent)
+            case .outdated: return ("可更新", StudioStyle.warning)
             default: return ("v\(AppVersion.version)", .secondary)
             }
         }()
@@ -107,14 +95,14 @@ struct AboutScreen: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.title3)
-                .foregroundStyle(.orange)
+                .foregroundStyle(StudioStyle.warning)
             Text("本项目仅供 HTTP 接口自动化学习与测试使用。请确保拥有目标测试问卷的授权，严禁污染他人问卷数据！")
                 .font(.callout)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        .background(StudioStyle.warning.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: - 链接
@@ -174,8 +162,7 @@ struct AboutScreen: View {
                 .controlSize(.small)
             }
             .padding(14)
-            .background(.background, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.quinary))
+            .studioPanel(radius: 12)
         }
     }
 }

@@ -11,14 +11,14 @@ struct DistributionBar: View {
     let values: [Int]
 
     static let palette: [Color] = [
-        Color(red: 0.00, green: 0.40, blue: 0.75),
-        Color(red: 0.18, green: 0.62, blue: 0.36),
-        Color(red: 0.91, green: 0.51, blue: 0.23),
-        Color(red: 0.61, green: 0.35, blue: 0.71),
-        Color(red: 0.91, green: 0.30, blue: 0.24),
-        Color(red: 0.09, green: 0.63, blue: 0.52),
-        Color(red: 0.95, green: 0.77, blue: 0.06),
-        Color(red: 0.20, green: 0.29, blue: 0.37),
+        Color(red: 0.30, green: 0.41, blue: 0.79),
+        Color(red: 0.53, green: 0.58, blue: 0.76),
+        Color(red: 0.69, green: 0.55, blue: 0.50),
+        Color(red: 0.45, green: 0.51, blue: 0.57),
+        Color(red: 0.52, green: 0.45, blue: 0.65),
+        Color(red: 0.72, green: 0.62, blue: 0.47),
+        Color(red: 0.33, green: 0.45, blue: 0.55),
+        Color(red: 0.61, green: 0.55, blue: 0.57),
     ]
 
     var body: some View {
@@ -245,7 +245,7 @@ struct HitRateSliders: View {
                 HStack(spacing: 2) {
                     ForEach(Array(values.enumerated()), id: \.offset) { _, value in
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.accentColor.opacity(0.15 + 0.85 * Double(min(100, max(0, value))) / 100))
+                            .fill(StudioStyle.accent.opacity(0.15 + 0.85 * Double(min(100, max(0, value))) / 100))
                     }
                 }
             }
@@ -259,7 +259,7 @@ struct HitRateSliders: View {
                         .frame(width: 150, alignment: .leading)
                     FluidSlider(
                         value: Double(values[index]) / 100.0,
-                        tint: .accentColor
+                        tint: StudioStyle.accent
                     ) { fraction in
                         var next = values
                         next[index] = RatioSliderMath.roundToStep(fraction * 100)
@@ -268,7 +268,7 @@ struct HitRateSliders: View {
                     Text("\(values[index])%")
                         .monospacedDigit()
                         .font(.callout.weight(.medium))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(StudioStyle.accent)
                         .frame(width: 46, alignment: .trailing)
                 }
             }

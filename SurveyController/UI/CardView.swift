@@ -1,5 +1,3 @@
-// 通用卡片容器（原 OverviewScreen 内组件，向导各步骤复用）
-
 import SwiftUI
 
 struct CardView<Content: View>: View {
@@ -7,14 +5,15 @@ struct CardView<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Text(title)
-                .font(.headline)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(StudioStyle.ink)
+                .accessibilityAddTraits(.isHeader)
             content
         }
-        .padding(16)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.quinary))
+        .studioPanel()
     }
 }

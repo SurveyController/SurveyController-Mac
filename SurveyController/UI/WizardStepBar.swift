@@ -1,60 +1,48 @@
-// 对标官方 5.0 向导步骤条：1-6 步圆圈 + 下方标签 + 连接线。
-
 import SwiftUI
 
 struct WizardStepBar: View {
-    let steps: [AppModel.WizardStep]
-    @Binding var current: AppModel.WizardStep
+    let current: AppModel.WizardStep
     let maxReached: AppModel.WizardStep
+    let running: Bool
     let onSelect: (AppModel.WizardStep) -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                if index > 0 {
-                    connector(after: steps[index - 1], before: step)
+        HStack(spacing: 5) {
+            ForEach(AppModel.WizardStep.allCases) { step in
+                let selected = step == current
+                let complete = step.rawValue < current.rawValue
+                Button {
+                    onSelect(step)
+                } label: {
+                    HStack(spacing: 7) {
+                        Group {
+                            if complete {
+                                Image(systemName: "checkmark")
+                            } else {
+                                Text(String(step.rawValue)).monospacedDigit()
+                            }
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 23, height: 23)
+                        .background(selected ? StudioStyle.accentFill : StudioStyle.raised, in: Circle())
+                        Text(step.title)
+                            .font(.subheadline.weight(selected ? .semibold : .medium))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(selected || complete ? StudioStyle.accent : StudioStyle.muted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .padding(.horizontal, 4)
+                    .background(selected ? StudioStyle.panel : .clear, in: RoundedRectangle(cornerRadius: 12))
+                    .contentShape(Rectangle())
                 }
-                stepItem(step)
+                .buttonStyle(.plain)
+                .disabled(running || step.rawValue > maxReached.rawValue)
+                .accessibilityLabel(step.title)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func stepItem(_ step: AppModel.WizardStep) -> some View {
-        let isCurrent = step == current
-        let isDone = step.rawValue < current.rawValue
-        let isReachable = step.rawValue <= maxReached.rawValue
-
-        return VStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .fill(isCurrent ? Color.accentColor : (isDone ? Color.accentColor.opacity(0.55) : Color(nsColor: .quaternaryLabelColor)))
-                    .frame(width: 28, height: 28)
-                Text("\(step.rawValue)")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isCurrent || isDone ? .white : Color.secondary)
-            }
-            Text(step.title)
-                .font(.caption)
-                .foregroundStyle(isCurrent ? .primary : .secondary)
-        }
-        .padding(.horizontal, 10)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if isReachable {
-                onSelect(step)
-            }
-        }
-        .help(isReachable ? "跳转到「\(step.title)」" : "需先完成前面的步骤")
-    }
-
-    private func connector(after: AppModel.WizardStep, before: AppModel.WizardStep) -> some View {
-        let active = before.rawValue <= current.rawValue
-        return Rectangle()
-            .fill(active ? Color.accentColor.opacity(0.55) : Color(nsColor: .quaternaryLabelColor))
-            .frame(height: 2)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 13)
-            .padding(.horizontal, -6)
+        .padding(5)
+        .background(StudioStyle.raised, in: RoundedRectangle(cornerRadius: 16))
     }
 }

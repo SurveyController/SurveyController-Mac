@@ -14,14 +14,12 @@ struct OfflineRehearsalView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("离线试跑").font(.title2.bold())
+                StudioHeading(title: "离线试跑", subtitle: "本地预览最多 20 份样例，AI 填空以占位文本展示。", icon: "checklist")
                 Spacer()
                 Button("关闭") { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
-            Text("本地预览最多 20 份样例，零提交。AI 填空以占位文本展示。")
-                .foregroundStyle(.secondary)
-            HStack {
+            HStack(spacing: 10) {
                 Text("随机种子")
                 TextField("随机种子", text: $seedText)
                     .frame(width: 145)
@@ -38,11 +36,13 @@ struct OfflineRehearsalView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .padding(12)
+            .studioPanel(radius: 12)
 
             if let issue {
                 HStack {
                     Label(issue.message, systemImage: "exclamationmark.circle")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(StudioStyle.danger)
                     if let question = issue.questionNumber {
                         Button("编辑第 \(question) 题") { edit(question) }
                             .buttonStyle(.link)
@@ -65,7 +65,9 @@ struct OfflineRehearsalView: View {
                 Spacer()
             }
         }
-        .padding(20)
+        .padding(22)
+        .background(StudioStyle.canvas)
+        .tint(StudioStyle.accent)
         .frame(minWidth: 590, idealWidth: 690, minHeight: 460, idealHeight: 560)
         .onDisappear { task?.cancel() }
     }
@@ -91,6 +93,9 @@ struct OfflineRehearsalView: View {
                 }
                 .padding(.vertical, 4)
             }
+            .listStyle(.inset)
+            .scrollContentBackground(.hidden)
+            .studioPanel(radius: 14)
         }
     }
 
@@ -116,6 +121,9 @@ struct OfflineRehearsalView: View {
             }
             .padding(.vertical, 4)
         }
+        .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+        .studioPanel(radius: 14)
     }
 
     private func questionButton(_ number: Int, title: String) -> some View {
