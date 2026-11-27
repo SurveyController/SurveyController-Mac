@@ -113,26 +113,30 @@ public enum AnswerProbabilities {
     }
 
     /// 对标 get_fill_text_from_config。
-    public static func getFillTextFromConfig(_ fillEntries: [Any?]?, optionIndex: Int) -> String? {
+    public static func getFillTextFromConfig(_ fillEntries: [Any?]?, optionIndex: Int, rng: RandomSource = SystemRandomSource()) -> String? {
         guard let fillEntries, optionIndex >= 0, optionIndex < fillEntries.count else { return nil }
         let value = fillEntries[optionIndex]
         if value == nil || value is NSNull { return nil }
+        if let candidates = value as? [String] {
+            return rng.choice(candidates.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+        }
         let text = JSONCoercion.asTrimmedString(value)
         return text.isEmpty ? nil : text
     }
 
     /// 对标 resolve_static_option_fill_text：AI token 回落默认文本。
     public static func resolveStaticOptionFillText(
-        _ fillEntries: [Any?]?, optionIndex: Int, question: SurveyQuestionMeta
+        _ fillEntries: [Any?]?, optionIndex: Int, question: SurveyQuestionMeta,
+        rng: RandomSource = SystemRandomSource(), preserveAI: Bool = false
     ) -> String? {
-        guard let rawValue = getFillTextFromConfig(fillEntries, optionIndex: optionIndex) else {
+        guard let rawValue = getFillTextFromConfig(fillEntries, optionIndex: optionIndex, rng: rng) else {
             return defaultMissingOptionFill(question, optionIndex: optionIndex, fillValue: nil)
         }
         if rawValue.isEmpty {
             return defaultMissingOptionFill(question, optionIndex: optionIndex, fillValue: nil)
         }
         if rawValue == optionFillAiToken {
-            return defaultFillText
+            return preserveAI ? rawValue : defaultFillText
         }
         return TextValues.resolveDynamicTextToken(rawValue)
     }

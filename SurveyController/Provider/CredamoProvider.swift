@@ -49,7 +49,7 @@ enum CredamoProvider {
         let endpoint = try Endpoint(url: config.url)
         let detail = try await fetchDetail(endpoint, userAgent: context.userAgent, client: client)
         let raw = rawQuestions(detail)
-        let records = try ProviderRegistry.answers(for: standardize(raw), context: &context)
+        let records = try await ProviderRegistry.answers(for: standardize(raw), context: &context, client: client)
         let byID = Dictionary(raw.map { ($0.firstText("questionId", "qstId", "id"), $0) }, uniquingKeysWith: { first, _ in first })
         let duration = max(1, Int((1000 * AnswerDurationSampler.sampleSeconds(config.answerDurationRangeSeconds, rng: context.rng)).rounded()))
         let timeCode = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
@@ -87,6 +87,7 @@ enum CredamoProvider {
             )
         }
         _ = try unwrap(payload)
+        await config.selectionRuntime?.record(records.map(\.1))
         return true
     }
 

@@ -239,8 +239,9 @@ public enum ConfigCodec {
     public static func normalizeRuntimeConfigPayload(_ raw: [String: Any]) throws -> RuntimeConfig {
         var config = RuntimeConfig()
 
+        let allowsOptionalFields = configVersion(raw["schema_version"]) == desktopConfigSchemaVersion
         let unknownKeys = Set(raw.keys).subtracting(runtimeConfigFields)
-        if !unknownKeys.isEmpty {
+        if !allowsOptionalFields && !unknownKeys.isEmpty {
             throw ConfigCodecError(
                 "\(configCorruptedMessage)：配置包含不支持的字段（\(unknownKeys.sorted().joined(separator: ", "))）"
             )
@@ -308,12 +309,10 @@ public enum ConfigCodec {
         case "inherit": hasAiKeys = false
         default: hasAiKeys = !aiKeys.isDisjoint(with: raw.keys)
         }
-        config.aiConfigPresent = hasAiKeys
-        config.aiConfigMode = hasAiKeys ? "override" : "inherit"
-        if hasAiKeys {
-            var aiMode = JSONCoercion.asTrimmedString(raw["ai_mode"]).lowercased()
-            if aiMode.isEmpty { aiMode = "provider" }
-            config.aiMode = ["free", "provider"].contains(aiMode) ? aiMode : "provider"
+        let override = hasAiKeys && JSONCoercion.asTrimmedString(raw["ai_mode"]).lowercased() != "free"
+        config.aiConfigPresent = override
+        config.aiConfigMode = override ? "override" : "inherit"
+        if override {
             config.aiProvider = JSONCoercion.asString(raw["ai_provider"]).isEmpty ? "custom" : JSONCoercion.asString(raw["ai_provider"])
             config.aiApiKey = JSONCoercion.asString(raw["ai_api_key"])
             config.aiBaseUrl = JSONCoercion.asString(raw["ai_base_url"])
@@ -326,7 +325,8 @@ public enum ConfigCodec {
         if let entriesData = raw["question_entries"] as? [Any] {
             for item in entriesData {
                 guard let dict = item as? [String: Any] else { continue }
-                let entry = try deserializeQuestionEntry(dict)
+                let entryPayload = allowsOptionalFields ? dict.filter { questionEntryFields.contains($0.key) } : dict
+                let entry = try deserializeQuestionEntry(entryPayload)
                 if config.surveyProvider != .wjx,
                    let entryProviderId = entry.providerQuestionId, !entryProviderId.isEmpty,
                    entry.surveyProvider == .wjx {
@@ -344,7 +344,7 @@ public enum ConfigCodec {
             for item in questionsInfoData {
                 guard let dict = item as? [String: Any] else { continue }
                 let metaFields = Set(dict.keys).subtracting(surveyQuestionMetaFields)
-                if !metaFields.isEmpty {
+                if !allowsOptionalFields && !metaFields.isEmpty {
                     throw ConfigCodecError(
                         "\(configCorruptedMessage)：题目元数据包含不支持的字段（\(metaFields.sorted().joined(separator: ", "))）"
                     )
@@ -364,9 +364,9 @@ public enum ConfigCodec {
     }
 
     /// 对标 serialize_runtime_config。
-    public static func serializeRuntimeConfig(_ source: RuntimeConfig) -> [String: Any] {
+    public static func serializeRuntimeConfig(_ source: RuntimeConfig, includeSecrets: Bool = false) -> [String: Any] {
         let config = populateQuestionIds(in: source)
-        return [
+        var payload: [String: Any] = [
             // v5 用 schema_version，v4.0.x 用 config_schema_version；两个都写以双向兼容
             "schema_version": desktopConfigSchemaVersion,
             "config_schema_version": currentConfigSchemaVersion,
@@ -388,11 +388,10 @@ public enum ConfigCodec {
             "pause_on_aliyun_captcha": config.pauseOnAliyunCaptcha,
             "reliability_mode_enabled": config.reliabilityModeEnabled,
             "psycho_target_alpha": config.psychoTargetAlpha,
-            "ai_mode": config.aiMode,
+            "ai_mode": "provider",
             "ai_provider": config.aiProvider,
             "ai_config_mode": config.aiConfigMode == "override" || config.aiConfigPresent
                 || !config.aiApiKey.isEmpty || !config.aiBaseUrl.isEmpty ? "override" : "inherit",
-            "ai_api_key": config.aiApiKey,
             "ai_base_url": config.aiBaseUrl,
             "ai_api_protocol": config.aiApiProtocol,
             "ai_model": config.aiModel,
@@ -407,6 +406,8 @@ public enum ConfigCodec {
             "question_entries": config.questionEntries.map(serializeQuestionEntry),
             "questions_info": serializeSurveyQuestionMetas(config.questionsInfo),
         ]
+        if includeSecrets && !config.aiApiKey.isEmpty { payload["ai_api_key"] = config.aiApiKey }
+        return payload
     }
 
     static func populateQuestionIds(in config: RuntimeConfig) -> RuntimeConfig {

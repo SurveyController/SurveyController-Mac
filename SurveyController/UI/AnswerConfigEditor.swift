@@ -68,6 +68,7 @@ struct AnswerConfigEditor: View {
                     Text("第\(question.displayNum ?? question.num)题 · \(question.title)")
                         .font(.title3.bold())
                     editor(for: question)
+                    answerStrategy(for: question)
                 }
                 .padding(20)
                 .frame(maxWidth: 720, alignment: .leading)
@@ -223,6 +224,10 @@ struct AnswerConfigEditor: View {
                 .frame(minHeight: 90)
                 .border(Color(nsColor: .separatorColor))
 
+            if let index = entryIndex(questionNum: question.num) {
+                Toggle("使用自定义 AI 填空", isOn: $model.runtimeConfig.questionEntries[index].aiEnabled)
+            }
+
             Picker("随机模式", selection: textModeBinding(question)) {
                 Text("固定文本").tag(textRandomNone)
                 Text("随机姓名").tag(textRandomName)
@@ -248,6 +253,52 @@ struct AnswerConfigEditor: View {
     }
 
     // MARK: - Entry 读写辅助
+
+    @ViewBuilder
+    private func answerStrategy(for question: SurveyQuestionMeta) -> some View {
+        let type = DefaultQuestionEntries.entryType(for: question)
+        if ["single", "dropdown", "multiple", "score", "scale", "matrix"].contains(type),
+           let index = entryIndex(questionNum: question.num) {
+            Divider()
+            Picker("比例模式", selection: $model.runtimeConfig.questionEntries[index].distributionMode) {
+                Text("随机").tag("random")
+                Text("按权重抽取").tag("weighted")
+                Text("严格比例").tag("custom")
+            }
+            if type != "multiple" {
+                TextField("信度维度（可选）", text: Binding(
+                    get: { model.runtimeConfig.questionEntries[index].dimension ?? "" },
+                    set: { model.runtimeConfig.questionEntries[index].dimension = $0.isEmpty ? nil : $0 }
+                ))
+            }
+            ForEach(question.fillableOptions, id: \.self) { option in
+                let captions = optionList(question)
+                if captions.indices.contains(option) {
+                    TextField("「\(captions[option])」补充文本，每行一个候选", text: optionFillBinding(entry: index, option: option), axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(2...4)
+                }
+            }
+        }
+    }
+
+    private func optionFillBinding(entry: Int, option: Int) -> Binding<String> {
+        Binding(
+            get: {
+                let fills = model.runtimeConfig.questionEntries[entry].optionFillTexts ?? []
+                guard fills.indices.contains(option) else { return "" }
+                if let items = fills[option] as? [String] { return items.joined(separator: "\n") }
+                return fills[option] as? String ?? ""
+            },
+            set: { value in
+                var fills = model.runtimeConfig.questionEntries[entry].optionFillTexts ?? []
+                if option >= fills.count { fills.append(contentsOf: repeatElement(nil, count: option - fills.count + 1)) }
+                let items = value.components(separatedBy: .newlines)
+                fills[option] = items.count > 1 ? items : value
+                model.runtimeConfig.questionEntries[entry].optionFillTexts = fills
+            }
+        )
+    }
 
     private func entryIndex(questionNum: Int) -> Int? {
         model.runtimeConfig.questionEntries.firstIndex { $0.questionNum == questionNum }

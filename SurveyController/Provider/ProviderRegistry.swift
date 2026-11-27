@@ -27,8 +27,9 @@ enum ProviderRegistry {
 
     static func answers(
         for currentQuestions: [SurveyQuestionMeta],
-        context: inout WjxProvider.SubmitContext
-    ) throws -> [(SurveyQuestionMeta, AnswerAction)] {
+        context: inout WjxProvider.SubmitContext,
+        client: HTTPClient
+    ) async throws -> [(SurveyQuestionMeta, AnswerAction)] {
         let existing = context.state.config.questionsOrdered.filter { !$0.isDescription }
         let current = currentQuestions.filter { !$0.isDescription }
         var bindings: [Int: SurveyQuestionMeta] = [:]
@@ -51,8 +52,10 @@ enum ProviderRegistry {
                 question, state: &context.state, threadName: context.threadName, rng: context.rng
             )
         }
-        guard !plan.actions.isEmpty else { throw SurveyProviderUnavailableAtRuntimeError("问卷没有可提交的答案") }
-        return plan.actions.compactMap { action in bindings[action.questionNum].map { ($0, action) } }
+        let config = context.state.config
+        let actions = try await AIAnswerResolver.resolve(plan.actions, metadata: config.questionsMetadata, settings: config.aiSettings, client: client)
+        guard !actions.isEmpty else { throw SurveyProviderUnavailableAtRuntimeError("问卷没有可提交的答案") }
+        return actions.compactMap { action in bindings[action.questionNum].map { ($0, action) } }
     }
 
     static func acquireProxy(_ context: WjxProvider.SubmitContext) async throws -> String? {

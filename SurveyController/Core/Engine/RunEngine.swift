@@ -230,10 +230,16 @@ public final class RunEngine: @unchecked Sendable {
         emitProgress()
         appendLog("任务启动：目标 \(config.targetNum) 份，并发 \(threadCount)。")
 
+        var execution = config
+        let plan = config.reverseFill == nil ? PsychometricPlan.build(config, shouldStop: {
+            queue.sync { stopRequested }
+        }) : [:]
+        execution.selectionRuntime = AnswerSelectionRuntime(plan: plan)
+        let prepared = execution
         await withTaskGroup(of: Void.self) { group in
             for slot in 1...threadCount {
                 group.addTask {
-                    await self.runSlot(slot: slot, config: config, proxyPool: proxyPool, submitHandler: submitHandler)
+                    await self.runSlot(slot: slot, config: prepared, proxyPool: proxyPool, submitHandler: submitHandler)
                 }
             }
         }
@@ -281,7 +287,9 @@ public final class RunEngine: @unchecked Sendable {
                 recordFailure(SurveyProviderUnavailableAtRuntimeError("可用的反填样本不足，已停止"), config: config)
                 break
             }
+            let selection = await config.selectionRuntime?.reserve(rng: rng)
             var state = ExecutionState(config: config)
+            state.answerSelection = selection
             state.reverseFillAnswers = sample?.answers ?? [:]
             var context = WjxProvider.SubmitContext(
                 state: state,
@@ -306,6 +314,7 @@ public final class RunEngine: @unchecked Sendable {
                     updateSlot(slot) { $0.success += 1; $0.status = "已成功" }
                     if let lease { await proxyPool?.markSuccess(lease) }
                 } else {
+                    if let selection { await config.selectionRuntime?.release(selection.index) }
                     if let sample { await config.reverseFill?.release(sample) }
                     queue.sync {
                         progress.claimedCount -= 1
@@ -313,6 +322,9 @@ public final class RunEngine: @unchecked Sendable {
                     }
                 }
             } catch {
+                if let selection, !(error is SubmissionResultUnknownError) {
+                    await config.selectionRuntime?.release(selection.index)
+                }
                 if let sample, !(error is SubmissionResultUnknownError) {
                     await config.reverseFill?.retryOnce(sample)
                 }
@@ -353,7 +365,9 @@ public final class RunEngine: @unchecked Sendable {
             }
 
             let terminalReason: String?
-            if error is SubmissionResultUnknownError || error is SurveyProviderStatusError {
+            if case .configuration? = error as? AIFillError {
+                terminalReason = error.localizedDescription
+            } else if error is SubmissionResultUnknownError || error is SurveyProviderStatusError {
                 terminalReason = error.localizedDescription
             } else if config.stopOnFailEnabled && consecutiveFailures >= config.failThreshold {
                 terminalReason = "连续失败已达阈值，任务停止"
@@ -389,6 +403,7 @@ public final class RunEngine: @unchecked Sendable {
         if case .proxyConnection? = error as? TransportError { return "代理连接失败" }
         if error is TransportError { return "网络错误" }
         if error is RandomIPAuthError { return "随机IP额度" }
+        if error is AIFillError { return "AI 填空" }
         return "其他错误"
     }
 }

@@ -287,6 +287,16 @@ struct TaskStepView: View {
                         }
                     }
                 }
+                CardView(title: "信度计划") {
+                    Toggle("启用信度计划", isOn: $model.runtimeConfig.reliabilityModeEnabled)
+                    HStack {
+                        Text("目标 α")
+                        TextField("目标 α", value: $model.runtimeConfig.psychoTargetAlpha, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 90)
+                    }
+                }
+
                 CardView(title: "任务行为") {
                     Toggle("连续失败 5 份自动停止", isOn: $model.runtimeConfig.failStopEnabled)
                 }
