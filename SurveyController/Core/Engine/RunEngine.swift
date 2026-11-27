@@ -62,7 +62,9 @@ public final class RunEngine: @unchecked Sendable {
     private var progress = RunProgress()
     private var stopRequested = false
     private var pauseRequested = false
-    private var pausedContinuations: [CheckedContinuation<Void, Never>] = []
+    private var submissionWaiters: [CheckedContinuation<Bool?, Never>] = []
+    private var intervalWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+    private var consecutiveFailures = 0
     private var runTask: Task<Void, Never>?
     private let logCapacity = 500
 
@@ -110,55 +112,91 @@ public final class RunEngine: @unchecked Sendable {
     // MARK: - 控制
 
     public func requestStop() {
-        stopRequested = true
-        resumePaused()
-        appendLog("收到停止请求，正在停止…")
+        let stopped = queue.sync {
+            guard runTask != nil, !stopRequested else { return false }
+            stopRequested = true
+            wakeWaiters()
+            return true
+        }
+        if stopped { appendLog("收到停止请求，正在停止…") }
     }
 
     public func requestPause() {
-        pauseRequested = true
-        _ = withProgress { $0.phase = .paused }
-        emitProgress()
-        appendLog("任务已暂停。")
+        let paused = queue.sync {
+            guard runTask != nil, !stopRequested, !pauseRequested else { return false }
+            pauseRequested = true
+            progress.phase = .paused
+            return true
+        }
+        if paused {
+            emitProgress()
+            appendLog("任务已暂停。")
+        }
     }
 
     public func resume() {
-        pauseRequested = false
-        resumePaused()
-        _ = withProgress { p in
-            if p.phase == .paused { p.phase = .running }
+        let resumed = queue.sync {
+            guard runTask != nil, !stopRequested, pauseRequested else { return false }
+            pauseRequested = false
+            progress.phase = .running
+            wakeSubmissionWaiters()
+            return true
         }
-        emitProgress()
-        appendLog("任务已继续。")
-    }
-
-    private func resumePaused() {
-        queue.sync {
-            let continuations = pausedContinuations
-            pausedContinuations.removeAll()
-            continuations.forEach { $0.resume() }
+        if resumed {
+            emitProgress()
+            appendLog("任务已继续。")
         }
     }
 
-    func waitIfPaused() async {
+    private func wakeSubmissionWaiters() {
+        let pending = submissionWaiters
+        submissionWaiters.removeAll()
+        pending.forEach { $0.resume(returning: nil) }
+    }
+
+    private func wakeWaiters() {
+        wakeSubmissionWaiters()
+        let pending = intervalWaiters.values
+        intervalWaiters.removeAll()
+        pending.forEach { $0.resume() }
+    }
+
+    private func claimSubmission() async -> Bool {
         while true {
-            let shouldWait: Bool = queue.sync { pauseRequested && !stopRequested }
-            guard shouldWait else { return }
-            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                let registered = queue.sync { () -> Bool in
-                    guard pauseRequested, !stopRequested else { return false }
-                    pausedContinuations.append(continuation)
-                    return true
+            let decision = await withCheckedContinuation { (continuation: CheckedContinuation<Bool?, Never>) in
+                queue.sync {
+                    guard !stopRequested, progress.successCount < progress.target else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+                    guard !pauseRequested, progress.claimedCount < progress.target else {
+                        submissionWaiters.append(continuation)
+                        return
+                    }
+                    progress.claimedCount += 1
+                    continuation.resume(returning: true)
                 }
-                if !registered {
+            }
+            if let decision { return decision }
+        }
+    }
+
+    private func waitForInterval(_ seconds: Double) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            queue.sync {
+                guard !stopRequested, progress.successCount < progress.target else {
                     continuation.resume()
+                    return
+                }
+                let id = UUID()
+                intervalWaiters[id] = continuation
+                queue.asyncAfter(deadline: .now() + seconds) { [weak self] in
+                    self?.intervalWaiters.removeValue(forKey: id)?.resume()
                 }
             }
         }
     }
 
-    /// 对标 start_run：启动任务。
-    /// submitHandler 默认为 WJX 提交（对标 fill_survey_http → brush_wjx_http）。
     public func start(
         config: ExecutionConfig,
         proxyPool: ProxyPool?,
@@ -166,109 +204,83 @@ public final class RunEngine: @unchecked Sendable {
             try await WjxProvider.submit(config, context: context)
         }
     ) {
-        runTask?.cancel()
-        runTask = Task { [weak self] in
-            guard let self else { return }
-            await self.run(config: config, proxyPool: proxyPool, submitHandler: submitHandler)
+        let threadCount = min(max(1, config.numThreads), Self.maxThreads)
+        queue.sync {
+            guard runTask == nil else { return }
+            progress = RunProgress()
+            progress.phase = .running
+            progress.target = max(1, config.targetNum)
+            progress.slots = (1...threadCount).map { SlotStatus(id: $0) }
+            stopRequested = false
+            pauseRequested = false
+            consecutiveFailures = 0
+            runTask = Task {
+                await self.run(threadCount: threadCount, config: config, proxyPool: proxyPool, submitHandler: submitHandler)
+            }
         }
     }
 
-    /// 对标 AsyncSlotRunner.run + AsyncScheduler 间隔调度。
-    func run(
+    private func run(
+        threadCount: Int,
         config: ExecutionConfig,
         proxyPool: ProxyPool?,
         submitHandler: @escaping SubmitHandler
     ) async {
-        stopRequested = false
-        pauseRequested = false
-
-
-        let threadCount = min(max(1, config.numThreads), Self.maxThreads)
-        _ = withProgress { p in
-            p = RunProgress()
-            p.phase = .running
-            p.target = config.targetNum
-            p.slots = (1...threadCount).map { SlotStatus(id: $0) }
-        }
         emitProgress()
         appendLog("任务启动：目标 \(config.targetNum) 份，并发 \(threadCount)。")
 
         await withTaskGroup(of: Void.self) { group in
             for slot in 1...threadCount {
-                group.addTask { [weak self] in
-                    await self?.runSlot(
-                        slot: slot, config: config, proxyPool: proxyPool, submitHandler: submitHandler
-                    )
+                group.addTask {
+                    await self.runSlot(slot: slot, config: config, proxyPool: proxyPool, submitHandler: submitHandler)
                 }
             }
         }
 
-        let finalPhase: RunPhase = withProgress { p in
-            p.phase = stopRequested ? .stopped : .finished
-            p.slots = p.slots.map { var s = $0; s.status = "已结束"; return s }
-            return p.phase
-        }
-        appendLog("任务结束：成功 \(withProgress(\.successCount)) 份，失败 \(withProgress(\.failCount)) 份。")
-        let snapshot = withProgress { $0 }
-        emitProgress()
-        if finalPhase != .stopped {
-            streamContinuation.yield(.finished(snapshot))
-        } else {
-            streamContinuation.yield(.finished(snapshot))
+        let result = currentProgress()
+        appendLog("任务结束：成功 \(result.successCount) 份，失败 \(result.failCount) 份。")
+        queue.sync {
+            if progress.phase != .failed {
+                progress.phase = progress.successCount >= progress.target || !stopRequested ? .finished : .stopped
+            }
+            streamContinuation.yield(.progress(progress))
+            streamContinuation.yield(.finished(progress))
+            runTask = nil
         }
     }
 
-    func runSlot(
+    private func runSlot(
         slot: Int,
         config: ExecutionConfig,
         proxyPool: ProxyPool?,
         submitHandler: @escaping SubmitHandler
     ) async {
         let threadName = "线程\(slot)"
-        var localRng = SystemRandomSource()
-
-        while !stopRequested {
-            await waitIfPaused()
-            if stopRequested { break }
-
-            // 达到目标份数 → 结束（对标 _should_stop_loop 的 target_reached）
-            // 认领必须原子预留（串行队列内 +1），否则并发槽位会重复认领导致超额提交
-            let claimed = withProgress { p -> Int in
-                p.claimedCount += 1
-                guard p.claimedCount <= p.target else { return -1 }
-                return p.claimedCount
-            }
-            if claimed < 0 { break }
-
+        while await claimSubmission() {
             updateSlot(slot) { $0.status = "提交中" }
             emitProgress()
 
-            // UA 选择（对标 select_user_agent：随机 UA 或默认 PC）
-            var userProfile: UserAgentProfile? = nil
-            if config.randomUserAgentEnabled {
-                userProfile = ConfigCodec.selectUserAgent(fromRatios: config.userAgentRatios, rng: localRng)
-            }
-            let userAgent = userProfile?.ua ?? WjxSubmitCodec.resolveUserAgent(nil)
-
-            // 随机 IP：提交前惰性获取
-            var lease: ProxyLease? = nil
-            let leaseFactory: (() async throws -> String?)? = config.randomProxyIpEnabled && proxyPool != nil ? {
-                do {
-                    let acquired = try await proxyPool!.acquire()
+            let rng = SystemRandomSource()
+            let profile = config.randomUserAgentEnabled
+                ? ConfigCodec.selectUserAgent(fromRatios: config.userAgentRatios, rng: rng)
+                : nil
+            var lease: ProxyLease?
+            let leaseFactory: (() async throws -> String?)?
+            if config.randomProxyIpEnabled, let proxyPool {
+                leaseFactory = {
+                    let acquired = try await proxyPool.acquire()
                     lease = acquired
                     return acquired.address
-                } catch {
-                    throw error
                 }
-            } : nil
-
-            let state = ExecutionState(config: config)
+            } else {
+                leaseFactory = nil
+            }
             var context = WjxProvider.SubmitContext(
-                state: state,
+                state: ExecutionState(config: config),
                 threadName: threadName,
-                userAgent: userAgent,
-                userAgentProfile: userProfile,
-                rng: localRng
+                userAgent: profile?.ua ?? WjxSubmitCodec.resolveUserAgent(nil),
+                userAgentProfile: profile,
+                rng: rng
             )
             context.submitProxyLeaseFactory = leaseFactory
             context.isStopRequested = { [weak self] in
@@ -277,68 +289,74 @@ public final class RunEngine: @unchecked Sendable {
             }
 
             do {
-                let ok = try await submitHandler(config, context)
-                if ok {
-                    _ = withProgress { $0.successCount += 1 }
+                if try await submitHandler(config, context) {
+                    queue.sync {
+                        progress.successCount += 1
+                        consecutiveFailures = 0
+                        if progress.successCount >= progress.target { wakeWaiters() }
+                    }
                     updateSlot(slot) { $0.success += 1; $0.status = "已成功" }
                     if let lease { await proxyPool?.markSuccess(lease) }
                 } else {
-                    _ = withProgress { $0.failCount += 1 }
-                    updateSlot(slot) { $0.fail += 1; $0.status = "跳过" }
+                    queue.sync {
+                        progress.claimedCount -= 1
+                        wakeSubmissionWaiters()
+                    }
                 }
             } catch {
-                _ = withProgress { $0.failCount += 1 }
+                recordFailure(error, config: config)
                 updateSlot(slot) { $0.fail += 1; $0.status = "失败" }
-                let reason = Self.failureCategory(error)
-                _ = withProgress { $0.failureReasons[reason, default: 0] += 1 }
                 if let lease {
                     if error is SubmissionVerificationRequiredError {
-                        // 智能验证 → 冷却该 IP（对标 _mark_proxy_temporarily_bad）
                         await proxyPool?.markTemporarilyBad(lease)
-                        appendLog("\(threadName)：随机IP触发风控，已冷却更换。")
-                    } else {
-                        await proxyPool?.release(lease)
+                    } else if case .proxyConnection? = error as? TransportError {
+                        await proxyPool?.markTemporarilyBad(lease)
                     }
                 }
-                appendLog("\(threadName)：提交失败（\(reason)）\(error.localizedDescription)")
-
-                // 对标 RunStopPolicy：连续失败达到阈值停止（AI 类失败阈值 5）
-                if config.stopOnFailEnabled {
-                    let shouldStop = withProgress { p -> Bool in
-                        p.successCount == 0 && p.failCount >= config.failThreshold
-                    }
-                    if shouldStop {
-                        withProgress { p in
-                            p.phase = .failed
-                            p.stopReason = "连续失败已达阈值，任务停止"
-                        }
-                        appendLog("连续失败 \(config.failThreshold) 次，任务已停止。请检查配置或网络。")
-                        stopRequested = true
-                        break
-                    }
-                }
+                appendLog("\(threadName)：提交失败（\(Self.failureCategory(error))）\(error.localizedDescription)")
             }
+            if let lease { await proxyPool?.release(lease) }
 
-            if let lease {
-                await proxyPool?.release(lease)
-            }
-
-            // 提交间隔（对标 dispatch_delay_seconds = uniform(min, max)）
             let (minInterval, maxInterval) = config.submitIntervalRangeSeconds
-            let delaySeconds: Double
-            if maxInterval > minInterval {
-                delaySeconds = Double.random(in: Double(minInterval)...Double(maxInterval))
-            } else {
-                delaySeconds = Double(max(0, minInterval))
-            }
-            if delaySeconds > 0 {
+            let delay = maxInterval > minInterval
+                ? Double.random(in: Double(minInterval)...Double(maxInterval))
+                : Double(max(0, minInterval))
+            if delay > 0, !queue.sync(execute: { stopRequested || progress.successCount >= progress.target }) {
                 updateSlot(slot) { $0.status = "等待中" }
                 emitProgress()
-                try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+                await waitForInterval(delay)
             }
         }
         updateSlot(slot) { $0.status = "已结束" }
         emitProgress()
+    }
+
+    private func recordFailure(_ error: Error, config: ExecutionConfig) {
+        queue.sync {
+            progress.failCount += 1
+            progress.failureReasons[Self.failureCategory(error), default: 0] += 1
+            consecutiveFailures += 1
+            if !(error is SubmissionResultUnknownError) {
+                progress.claimedCount -= 1
+            }
+
+            let terminalReason: String?
+            if error is SubmissionResultUnknownError || error is SurveyProviderStatusError {
+                terminalReason = error.localizedDescription
+            } else if config.stopOnFailEnabled && consecutiveFailures >= config.failThreshold {
+                terminalReason = "连续失败已达阈值，任务停止"
+            } else {
+                terminalReason = nil
+            }
+            if let terminalReason, !stopRequested {
+                stopRequested = true
+                progress.phase = .failed
+                progress.stopReason = terminalReason
+                wakeWaiters()
+            } else {
+                wakeSubmissionWaiters()
+            }
+        }
     }
 
     func updateSlot(_ slot: Int, _ update: (inout SlotStatus) -> Void) {
@@ -355,6 +373,8 @@ public final class RunEngine: @unchecked Sendable {
         if error is SurveyProviderUnavailableAtRuntimeError { return "问卷不可用" }
         if error is SurveyPausedError { return "问卷已暂停" }
         if error is SurveyStoppedError { return "问卷已停止" }
+        if error is SubmissionResultUnknownError { return "提交结果不确定" }
+        if case .proxyConnection? = error as? TransportError { return "代理连接失败" }
         if error is TransportError { return "网络错误" }
         if error is RandomIPAuthError { return "随机IP额度" }
         return "其他错误"

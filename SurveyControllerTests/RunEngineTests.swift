@@ -170,6 +170,68 @@ final class RunEngineTests: XCTestCase {
         XCTAssertEqual(final.slots.count, 4)
     }
 
+    func test_engine_reuses_failed_claims_and_ignores_duplicate_start() async {
+        let engine = RunEngine()
+        let gate = AsyncStream<Void>.makeStream()
+        let attempts = AsyncStream<Void>.makeStream()
+        engine.start(config: makeConfig(target: 1, threads: 3), proxyPool: nil) { @Sendable _, _ in
+            attempts.continuation.yield(())
+            for await _ in gate.stream { break }
+            return true
+        }
+        for await _ in attempts.stream { break }
+        engine.start(config: makeConfig(target: 2), proxyPool: nil) { @Sendable _, _ in
+            XCTFail("重复启动不应进入提交")
+            return true
+        }
+        gate.continuation.yield(())
+        gate.continuation.finish()
+        let final = await waitForFinish(engine)
+        XCTAssertEqual(final.target, 1)
+        XCTAssertEqual(final.successCount, 1)
+        XCTAssertEqual(final.claimedCount, 1)
+
+        let retryEngine = RunEngine()
+        let submitter = RetryOnce()
+        retryEngine.start(config: makeConfig(target: 1, threads: 3), proxyPool: nil) { @Sendable _, _ in
+            try await submitter.submit()
+        }
+        let retried = await waitForFinish(retryEngine)
+        XCTAssertEqual(retried.successCount, 1)
+        XCTAssertEqual(retried.failureReasons["代理连接失败"], 1)
+    }
+
+    func test_engine_commits_in_flight_success_after_stop() async {
+        let engine = RunEngine()
+        let started = AsyncStream<Void>.makeStream()
+        let response = AsyncStream<Void>.makeStream()
+        var config = makeConfig(target: 2)
+        config.submitIntervalRangeSeconds = (60, 60)
+        engine.start(config: config, proxyPool: nil) { @Sendable _, _ in
+            started.continuation.yield(())
+            for await _ in response.stream { break }
+            return true
+        }
+        for await _ in started.stream { break }
+        engine.requestStop()
+        response.continuation.yield(())
+        response.continuation.finish()
+        let final = await waitForFinish(engine)
+        XCTAssertEqual(final.phase, .stopped)
+        XCTAssertEqual(final.successCount, 1)
+    }
+
+    func test_engine_stops_after_unknown_result_even_with_failure_threshold_disabled() async {
+        let engine = RunEngine()
+        engine.start(config: makeConfig(target: 4, failStop: false), proxyPool: nil) { @Sendable _, _ in
+            throw SubmissionResultUnknownError(detail: "连接中断")
+        }
+        let final = await waitForFinish(engine)
+        XCTAssertEqual(final.phase, .failed)
+        XCTAssertEqual(final.failureReasons["提交结果不确定"], 1)
+        XCTAssertEqual(final.claimedCount, 1)
+    }
+
     // 失败分类（对标 failure_reason）
     func test_failure_category_maps_known_errors() {
         XCTAssertEqual(RunEngine.failureCategory(SubmissionVerificationRequiredError("x")), "智能验证")
@@ -206,5 +268,17 @@ final class BackendClientParsingTests: XCTestCase {
         XCTAssertEqual(session.remainingQuota, 8.5)
         XCTAssertTrue(session.quotaKnown)
         XCTAssertTrue(session.isComplete)
+    }
+}
+
+private actor RetryOnce {
+    private var first = true
+
+    func submit() throws -> Bool {
+        if first {
+            first = false
+            throw TransportError.proxyConnection("连接失败")
+        }
+        return true
     }
 }

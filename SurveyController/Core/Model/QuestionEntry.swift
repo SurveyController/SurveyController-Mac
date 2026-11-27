@@ -32,6 +32,7 @@ public struct QuestionEntry: @unchecked Sendable {
     public var surveyProvider: SurveyProvider
     public var providerQuestionId: String?
     public var providerPageId: String?
+    public var questionId: String
     public var aiEnabled: Bool
     public var multiTextBlankModes: [String]
     public var multiTextBlankAiFlags: [Bool]
@@ -59,6 +60,7 @@ public struct QuestionEntry: @unchecked Sendable {
         surveyProvider: SurveyProvider = .wjx,
         providerQuestionId: String? = nil,
         providerPageId: String? = nil,
+        questionId: String = "",
         aiEnabled: Bool = false,
         multiTextBlankModes: [String] = [],
         multiTextBlankAiFlags: [Bool] = [],
@@ -85,6 +87,7 @@ public struct QuestionEntry: @unchecked Sendable {
         self.surveyProvider = surveyProvider
         self.providerQuestionId = providerQuestionId
         self.providerPageId = providerPageId
+        self.questionId = questionId
         self.aiEnabled = aiEnabled
         self.multiTextBlankModes = multiTextBlankModes
         self.multiTextBlankAiFlags = multiTextBlankAiFlags

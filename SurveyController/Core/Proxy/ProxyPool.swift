@@ -145,8 +145,10 @@ public actor ProxyPool {
     private var successful: Set<String> = []
     private let provider: ProxyProvider
 
-    public init(provider: ProxyProvider) {
+    public init(provider: ProxyProvider, areaCode: String? = nil) {
         self.provider = provider
+        let normalized = AreaService.normalizeAreaCode(areaCode)
+        self.areaCode = normalized.isEmpty ? nil : normalized
     }
 
     public var availableCount: Int { available.count }
