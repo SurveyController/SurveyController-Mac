@@ -1,17 +1,23 @@
 import SwiftUI
 
 enum StudioStyle {
-    static let canvas = adaptive(0xF3F4F7, 0x15171C)
-    static let panel = adaptive(0xFFFFFF, 0x202329)
-    static let raised = adaptive(0xEBEDF2, 0x2A2D35)
-    static let border = adaptive(0xDBE0E9, 0x383D49)
-    static let accent = adaptive(0x2D50CB, 0xA7BBFF)
-    static let onAccent = adaptive(0xFFFFFF, 0x131D3A)
-    static let accentFill = adaptive(0xE9EEFC, 0x303952)
-    static let ink = adaptive(0x1B2230, 0xEDF0F6)
-    static let muted = adaptive(0x545E70, 0xADB7CA)
+    static let canvas = adaptive(0xF3F4F7, 0x202124)
+    static let toolbar = adaptive(0xFFFFFF, 0x292A2D)
+    static let panel = adaptive(0xFFFFFF, 0x3C4043)
+    static let raised = adaptive(0xEBEDF2, 0x292A2D)
+    static let border = adaptive(0xDBE0E9, 0x5F6368)
+    static let hover = adaptive(0xEBEDF2, 0x5F6368)
+    static let accent = adaptive(0x2D50CB, 0x8AB4F8)
+    static let primaryButton = adaptive(0x2D50CB, 0x1A73E8)
+    static let onPrimaryButton = Color.white
+    static let accentFill = adaptive(0xE9EEFC, 0x303B4D)
+    static let ink = adaptive(0x1B2230, 0xE8EAED)
+    static let muted = adaptive(0x545E70, 0x9AA0A6)
+    static let mutedOnPanel = adaptive(0x545E70, 0xBDC1C6)
     static let warning = adaptive(0x8A4A10, 0xF0BB7D)
-    static let danger = adaptive(0xAD3349, 0xFFA5B3)
+    static let danger = adaptive(0xAD3349, 0xF28B82)
+    static let dangerOnPanel = adaptive(0xAD3349, 0xF6A39B)
+    static let success = adaptive(0x237246, 0x81C995)
 
     private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
@@ -23,8 +29,18 @@ enum StudioStyle {
 }
 
 extension View {
+    func studioField(focused: Bool, radius: CGFloat = 9) -> some View {
+        background(StudioStyle.canvas, in: RoundedRectangle(cornerRadius: radius))
+            .overlay {
+                RoundedRectangle(cornerRadius: radius)
+                    .strokeBorder(focused ? StudioStyle.accent : StudioStyle.border, lineWidth: focused ? 2 : 1)
+                    .allowsHitTesting(false)
+            }
+    }
+
     func studioPanel(radius: CGFloat = 19) -> some View {
-        background(StudioStyle.panel, in: RoundedRectangle(cornerRadius: radius))
+        foregroundStyle(StudioStyle.ink, StudioStyle.mutedOnPanel)
+            .background(StudioStyle.panel, in: RoundedRectangle(cornerRadius: radius))
             .overlay {
                 RoundedRectangle(cornerRadius: radius)
                     .strokeBorder(StudioStyle.border)
@@ -84,7 +100,7 @@ struct StudioMetric: View {
         VStack(alignment: .leading, spacing: 9) {
             Label(title, systemImage: icon)
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(StudioStyle.muted)
+                .foregroundStyle(StudioStyle.mutedOnPanel)
             Text(value)
                 .font(.system(size: 28, weight: .semibold, design: .monospaced))
                 .foregroundStyle(color)

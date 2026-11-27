@@ -6,6 +6,7 @@ struct LogsScreen: View {
 
     @State private var autoScroll = true
     @State private var search = ""
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -18,15 +19,17 @@ struct LogsScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 9) {
                     if embedded { Text("运行日志").font(.headline) }
-                    Text("\(lines.count) 行").font(.caption.monospacedDigit()).foregroundStyle(StudioStyle.muted)
+                    Text("\(lines.count) 行").font(.caption.monospacedDigit()).foregroundStyle(StudioStyle.mutedOnPanel)
                     Spacer()
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass").foregroundStyle(StudioStyle.muted)
-                        TextField("搜索日志", text: $search).textFieldStyle(.plain)
+                        TextField("搜索日志", text: $search)
+                            .textFieldStyle(.plain)
+                            .focused($searchFocused)
                     }
                     .padding(8)
                     .frame(maxWidth: 170)
-                    .background(StudioStyle.canvas, in: RoundedRectangle(cornerRadius: 9))
+                    .studioField(focused: searchFocused)
                     Toggle("自动滚动", isOn: $autoScroll).controlSize(.small)
                     Button {
                         NSPasteboard.general.clearContents()
@@ -84,7 +87,7 @@ struct LogsScreen: View {
 
     private func lineColor(_ line: String) -> Color {
         if line.contains("失败") || line.contains("错误") { return StudioStyle.danger }
-        if line.contains("成功") { return StudioStyle.accent }
+        if line.contains("成功") { return StudioStyle.success }
         if line.contains("警告") || line.contains("风控") { return StudioStyle.warning }
         return StudioStyle.muted
     }
@@ -134,9 +137,9 @@ struct SettingsScreen: View {
                         }
                     }
                     HStack {
-                        Text("密钥存入 macOS 钥匙串。").font(.caption).foregroundStyle(StudioStyle.muted)
+                        Text("密钥存入 macOS 钥匙串。").font(.caption).foregroundStyle(StudioStyle.mutedOnPanel)
                         Spacer()
-                        Button("保存 AI 设置", action: model.saveAISettings).buttonStyle(.borderedProminent)
+                        Button("保存 AI 设置", action: model.saveAISettings).buttonStyle(.borderedProminent).tint(StudioStyle.primaryButton)
                     }
                 }
 
@@ -144,7 +147,7 @@ struct SettingsScreen: View {
                     HStack {
                         Text(AppModel.configDirectory.path)
                             .font(.caption.monospaced())
-                            .foregroundStyle(StudioStyle.muted)
+                            .foregroundStyle(StudioStyle.mutedOnPanel)
                             .textSelection(.enabled)
                         Spacer()
                         Button("在 Finder 中打开") { NSWorkspace.shared.open(AppModel.configDirectory) }
@@ -154,7 +157,7 @@ struct SettingsScreen: View {
                 CardView(title: "运行日志存档") {
                     HStack {
                         Text("每次运行自动存档，保留最近 10 份")
-                            .font(.caption).foregroundStyle(StudioStyle.muted)
+                            .font(.caption).foregroundStyle(StudioStyle.mutedOnPanel)
                         Spacer()
                         Button("打开日志目录") { NSWorkspace.shared.open(AppModel.logsDirectory) }
                     }

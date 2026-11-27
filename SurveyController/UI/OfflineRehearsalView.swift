@@ -26,6 +26,7 @@ struct OfflineRehearsalView: View {
                     .onSubmit(generate)
                 Button(report == nil ? "生成样例" : "重新生成", action: generate)
                     .buttonStyle(.borderedProminent)
+                    .tint(StudioStyle.primaryButton)
                     .disabled(Int(seedText) == nil || task != nil)
                 if task != nil {
                     ProgressView().controlSize(.small)
@@ -85,10 +86,10 @@ struct OfflineRehearsalView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     questionButton(question.id, title: question.title)
                     Text(question.answer)
-                        .foregroundStyle(question.answered ? .primary : .secondary)
+                        .foregroundStyle(question.answered ? StudioStyle.ink : StudioStyle.mutedOnPanel)
                         .textSelection(.enabled)
                     ForEach(question.details, id: \.self) { detail in
-                        Text(detail).font(.caption).foregroundStyle(.secondary)
+                        Text(detail).font(.caption).foregroundStyle(StudioStyle.mutedOnPanel)
                     }
                 }
                 .padding(.vertical, 4)

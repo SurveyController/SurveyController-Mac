@@ -61,6 +61,7 @@ struct AboutScreen: View {
                         Button("前往下载") { model.openReleasePage(url) }
                             .controlSize(.small)
                             .buttonStyle(.borderedProminent)
+                            .tint(StudioStyle.primaryButton)
                     }
                 }
             }
@@ -74,7 +75,7 @@ struct AboutScreen: View {
     private var versionBadge: some View {
         let text: (String, Color)? = {
             switch model.updateState {
-            case .latest: return ("最新", StudioStyle.accent)
+            case .latest: return ("最新", StudioStyle.success)
             case .outdated: return ("可更新", StudioStyle.warning)
             default: return ("v\(AppVersion.version)", .secondary)
             }
