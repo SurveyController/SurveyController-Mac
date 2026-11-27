@@ -8,6 +8,7 @@ public struct ExecutionState: @unchecked Sendable {
     public var config: ExecutionConfig
     var reverseFillAnswers: [Int: AnswerAction] = [:]
     var answerSelection: AnswerSelectionSample?
+    var rehearsalRules: [Int: [String]]?
     /// 已答题目记录：题号 → 已选选项下标（一致性规则用）
     public var answeredChoices: [Int: Set<Int>] = [:]
     /// 免费AI 预填充缓存：thread → (题号 → [String])
@@ -78,12 +79,20 @@ public enum ConsistencyRules {
     public static func singleLikeConstraint(
         _ rules: [[String: Any]], questionNum: Int, answeredChoices: [Int: Set<Int>]
     ) -> Int? {
+        singleLikeMatch(rules, questionNum: questionNum, answeredChoices: answeredChoices)?.index
+    }
+
+    static func singleLikeMatch(
+        _ rules: [[String: Any]], questionNum: Int, answeredChoices: [Int: Set<Int>]
+    ) -> (index: Int, source: Int)? {
         for rule in rules {
             guard JSONCoercion.asInt(rule["target_question_num"]) == questionNum,
                   JSONCoercion.asTrimmedString(rule["action_mode"]) == "must_select",
                   conditionMet(rule, answeredChoices: answeredChoices) else { continue }
             let indices = JSONCoercion.asIntList(rule["target_option_indices"])
-            if let first = indices.first, first >= 0 { return first }
+            if let first = indices.first, first >= 0 {
+                return (first, JSONCoercion.asInt(rule["condition_question_num"]))
+            }
         }
         return nil
     }

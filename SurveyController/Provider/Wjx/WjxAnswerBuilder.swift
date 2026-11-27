@@ -67,10 +67,13 @@ public enum WjxAnswerBuilder {
         let optionCount = max(1, optionTexts.count != 0 ? optionTexts.count : question.options)
 
         var forcedIndex = AnswerProbabilities.validForcedChoiceIndex(question.forcedOptionIndex, optionCount: optionCount)
-        if forcedIndex == nil {
-            forcedIndex = ConsistencyRules.singleLikeConstraint(
-                config.answerRules, questionNum: current, answeredChoices: state.answeredChoices
-            ).flatMap { AnswerProbabilities.validForcedChoiceIndex($0, optionCount: optionCount) }
+        if forcedIndex == nil, let match = ConsistencyRules.singleLikeMatch(
+            config.answerRules, questionNum: current, answeredChoices: state.answeredChoices
+        ) {
+            forcedIndex = AnswerProbabilities.validForcedChoiceIndex(match.index, optionCount: optionCount)
+            if forcedIndex != nil {
+                state.rehearsalRules?[current, default: []].append("命中第 \(match.source) 题的必选规则")
+            }
         }
 
         let selectedIndex: Int
@@ -123,10 +126,13 @@ public enum WjxAnswerBuilder {
         let optionCount = max(1, optionTexts.count != 0 ? optionTexts.count : question.options)
 
         var forcedIndex = AnswerProbabilities.validForcedChoiceIndex(question.forcedOptionIndex, optionCount: optionCount)
-        if forcedIndex == nil {
-            forcedIndex = ConsistencyRules.singleLikeConstraint(
-                config.answerRules, questionNum: current, answeredChoices: state.answeredChoices
-            ).flatMap { AnswerProbabilities.validForcedChoiceIndex($0, optionCount: optionCount) }
+        if forcedIndex == nil, let match = ConsistencyRules.singleLikeMatch(
+            config.answerRules, questionNum: current, answeredChoices: state.answeredChoices
+        ) {
+            forcedIndex = AnswerProbabilities.validForcedChoiceIndex(match.index, optionCount: optionCount)
+            if forcedIndex != nil {
+                state.rehearsalRules?[current, default: []].append("命中第 \(match.source) 题的必选规则")
+            }
         }
 
         let selectedIndex: Int
@@ -216,10 +222,13 @@ public enum WjxAnswerBuilder {
         let optionCount = max(2, optionTexts.count != 0 ? optionTexts.count : question.options)
 
         var forcedIndex = AnswerProbabilities.validForcedChoiceIndex(question.forcedOptionIndex, optionCount: optionCount)
-        if forcedIndex == nil {
-            forcedIndex = ConsistencyRules.singleLikeConstraint(
-                config.answerRules, questionNum: current, answeredChoices: state.answeredChoices
-            ).flatMap { AnswerProbabilities.validForcedChoiceIndex($0, optionCount: optionCount) }
+        if forcedIndex == nil, let match = ConsistencyRules.singleLikeMatch(
+            config.answerRules, questionNum: current, answeredChoices: state.answeredChoices
+        ) {
+            forcedIndex = AnswerProbabilities.validForcedChoiceIndex(match.index, optionCount: optionCount)
+            if forcedIndex != nil {
+                state.rehearsalRules?[current, default: []].append("命中第 \(match.source) 题的必选规则")
+            }
         }
 
         let selectedIndex: Int
@@ -261,6 +270,9 @@ public enum WjxAnswerBuilder {
         let maxAllowed = rawMaxAllowed
 
         let constraint = ConsistencyRules.multipleConstraint(config.answerRules, questionNum: current, optionCount: optionCount)
+        if !constraint.mustSelect.isEmpty || !constraint.mustNotSelect.isEmpty {
+            state.rehearsalRules?[current, default: []].append("已应用多选必选／禁选约束")
+        }
         let requiredIndices = AnswerProbabilities.normalizeSelectedIndices(constraint.mustSelect, optionCount: optionCount)
         let blockedIndices = AnswerProbabilities.normalizeSelectedIndices(constraint.mustNotSelect, optionCount: optionCount)
 
