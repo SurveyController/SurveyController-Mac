@@ -129,7 +129,9 @@ public enum WjxProvider {
                 threadName: context.threadName, rng: context.rng
             )
         }
-        let actions = plan.actions
+        let actions = try await AIAnswerResolver.resolve(
+            plan.actions, metadata: config.questionsMetadata, settings: config.aiSettings, client: client
+        )
         if actions.isEmpty { return false }
 
         let submitdata = try WjxSubmitCodec.submitdataFromActions(
@@ -218,6 +220,7 @@ public enum WjxProvider {
                 proxyAddress: submitProxyAddress
             )
         }
+        await config.selectionRuntime?.record(actions)
         return true
     }
 }

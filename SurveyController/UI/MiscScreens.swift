@@ -80,6 +80,21 @@ struct SettingsScreen: View {
                     ))
                 }
 
+                CardView(title: "自定义 AI") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("API Base URL", text: $model.aiSettings.baseURL)
+                        SecureField("API Key", text: $model.aiSettings.apiKey)
+                        TextField("模型名称", text: $model.aiSettings.model)
+                        Picker("接口协议", selection: $model.aiSettings.protocolName) {
+                            Text("自动").tag("auto")
+                            Text("Chat Completions").tag("chat_completions")
+                            Text("Responses").tag("responses")
+                        }
+                        TextField("系统提示词（可选）", text: $model.aiSettings.systemPrompt)
+                        Button("保存 AI 设置", action: model.saveAISettings)
+                    }
+                }
+
                 CardView(title: "配置文件") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("配置目录：\(AppModel.configDirectory.path)")

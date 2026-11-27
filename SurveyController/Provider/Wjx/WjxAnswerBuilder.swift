@@ -1,6 +1,4 @@
 // 对标 wjx/provider/answering_builders.py
-// v0.1 简化说明（后续版本补齐）：信度倾向(tendency)、分布收敛(distribution)、
-// 人设加权(persona)、严格比例(strict_ratio)、反填(reverse_fill)、AI 填空为恒等/禁用路径。
 
 import Foundation
 
@@ -36,11 +34,11 @@ public enum WjxAnswerBuilder {
         case "location":
             action = nil
         case "matrix":
-            action = try buildMatrixAction(question, configIndex, config: config, rng: rng)
+            action = try buildMatrixAction(question, configIndex, state: &state, rng: rng)
         case "scale":
-            action = try buildScoreLikeAction(question, configIndex, config: config, answerType: "scale", rng: rng)
+            action = try buildScoreLikeAction(question, configIndex, state: &state, answerType: "scale", rng: rng)
         case "score":
-            action = try buildScoreLikeAction(question, configIndex, config: config, answerType: "score", rng: rng)
+            action = try buildScoreLikeAction(question, configIndex, state: &state, answerType: "score", rng: rng)
         case "slider":
             action = buildSliderAction(question, configIndex, config: config)
         case "order":
@@ -83,14 +81,14 @@ public enum WjxAnswerBuilder {
                 configIndex < config.singleProb.count ? config.singleProb[configIndex] : -1,
                 optionCount: optionCount
             )
-            selectedIndex = rng.weightedIndex(probabilities)
+            selectedIndex = AnswerSelection.choose(probabilities, labels: optionTexts, question: current, state: state, rng: rng)
         }
 
         state.recordChoice(questionNum: current, indices: [selectedIndex])
 
         let selectedText = selectedIndex < optionTexts.count ? optionTexts[selectedIndex] : ""
         let fillEntries = configIndex < config.singleOptionFillTexts.count ? config.singleOptionFillTexts[configIndex] : nil
-        var fillValue = AnswerProbabilities.resolveStaticOptionFillText(fillEntries, optionIndex: selectedIndex, question: question)
+        var fillValue = AnswerProbabilities.resolveStaticOptionFillText(fillEntries, optionIndex: selectedIndex, question: question, rng: rng, preserveAI: config.aiSettings != nil)
         fillValue = AnswerProbabilities.defaultMissingOptionFill(question, optionIndex: selectedIndex, fillValue: fillValue)
 
         let combined: String
@@ -139,14 +137,14 @@ public enum WjxAnswerBuilder {
                 configIndex < config.droplistProb.count ? config.droplistProb[configIndex] : -1,
                 optionCount: optionCount
             )
-            selectedIndex = rng.weightedIndex(probabilities)
+            selectedIndex = AnswerSelection.choose(probabilities, labels: optionTexts, question: current, state: state, rng: rng)
         }
 
         state.recordChoice(questionNum: current, indices: [selectedIndex])
 
         let selectedText = selectedIndex < optionTexts.count ? optionTexts[selectedIndex] : ""
         let fillEntries = configIndex < config.droplistOptionFillTexts.count ? config.droplistOptionFillTexts[configIndex] : nil
-        var fillValue = AnswerProbabilities.resolveStaticOptionFillText(fillEntries, optionIndex: selectedIndex, question: question)
+        var fillValue = AnswerProbabilities.resolveStaticOptionFillText(fillEntries, optionIndex: selectedIndex, question: question, rng: rng, preserveAI: config.aiSettings != nil)
         fillValue = AnswerProbabilities.defaultMissingOptionFill(question, optionIndex: selectedIndex, fillValue: fillValue)
 
         let combined: String
@@ -190,6 +188,10 @@ public enum WjxAnswerBuilder {
         if textValues.isEmpty { textValues = [defaultFillText] }
 
         let finalValues = (0..<blankCount).map { index -> String in
+            let wholeQuestionAI = config.textAiFlags.indices.contains(configIndex) && config.textAiFlags[configIndex]
+            let perBlank = config.multiTextAiFlags.indices.contains(configIndex) ? config.multiTextAiFlags[configIndex] : []
+            let useAI = perBlank.contains(true) ? (perBlank.indices.contains(index) && perBlank[index]) : wholeQuestionAI
+            if config.aiSettings != nil, useAI, question.forcedTexts.isEmpty { return optionFillAiToken }
             let value = index < textValues.count ? textValues[index] : (textValues.last ?? defaultFillText)
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? defaultFillText : trimmed
@@ -205,9 +207,10 @@ public enum WjxAnswerBuilder {
     /// 对标 _build_wjx_score_like_action（量表/评分）。
     static func buildScoreLikeAction(
         _ question: SurveyQuestionMeta, _ configIndex: Int,
-        config: ExecutionConfig, answerType: String,
+        state: inout ExecutionState, answerType: String,
         rng: RandomSource
     ) throws -> AnswerAction? {
+        let config = state.config
         let current = question.num
         let optionTexts = runtimeOptionTexts(question)
         let optionCount = max(2, optionTexts.count != 0 ? optionTexts.count : question.options)
@@ -215,7 +218,7 @@ public enum WjxAnswerBuilder {
         var forcedIndex = AnswerProbabilities.validForcedChoiceIndex(question.forcedOptionIndex, optionCount: optionCount)
         if forcedIndex == nil {
             forcedIndex = ConsistencyRules.singleLikeConstraint(
-                config.answerRules, questionNum: current, answeredChoices: [:]
+                config.answerRules, questionNum: current, answeredChoices: state.answeredChoices
             ).flatMap { AnswerProbabilities.validForcedChoiceIndex($0, optionCount: optionCount) }
         }
 
@@ -227,9 +230,10 @@ public enum WjxAnswerBuilder {
                 configIndex < config.scaleProb.count ? config.scaleProb[configIndex] : -1,
                 optionCount: optionCount
             )
-            selectedIndex = rng.weightedIndex(probabilities)
+            selectedIndex = AnswerSelection.choose(probabilities, labels: optionTexts, question: current, state: state, rng: rng)
         }
 
+        state.recordChoice(questionNum: current, indices: [selectedIndex])
         let selectedText = selectedIndex < optionTexts.count ? optionTexts[selectedIndex] : ""
         return AnswerAction(
             questionNum: current,
@@ -269,7 +273,7 @@ public enum WjxAnswerBuilder {
             var selectedTexts: [String] = []
             for optionIdx in selected {
                 var selectedText = optionIdx < optionTexts.count ? optionTexts[optionIdx] : ""
-                var fillValue = AnswerProbabilities.resolveStaticOptionFillText(fillEntries, optionIndex: optionIdx, question: question)
+                var fillValue = AnswerProbabilities.resolveStaticOptionFillText(fillEntries, optionIndex: optionIdx, question: question, rng: rng, preserveAI: config.aiSettings != nil)
                 fillValue = AnswerProbabilities.defaultMissingOptionFill(question, optionIndex: optionIdx, fillValue: fillValue)
                 if let fillValue, !fillValue.isEmpty {
                     fillTexts.append((optionIdx, fillValue))
@@ -330,6 +334,9 @@ public enum WjxAnswerBuilder {
             sanitized = Array(sanitized.prefix(optionCount))
         }
 
+        if !config.strictRatioQuestions.contains(current), let sample = state.answerSelection {
+            sanitized = sample.persona.boost(sanitized, labels: optionTexts).map { min(100, $0) }
+        }
         let blockedSet = Set(blockedIndices)
         let requiredSet = Set(requiredIndices)
         for index in 0..<sanitized.count where blockedSet.contains(index) || requiredSet.contains(index) {
@@ -338,6 +345,16 @@ public enum WjxAnswerBuilder {
 
         let positiveIndices = (0..<optionCount).filter { sanitized[$0] > 0 }
         if positiveIndices.isEmpty && requiredIndices.isEmpty { return nil }
+
+        if config.strictRatioQuestions.contains(current) {
+            let additional = AnswerSelection.strictMultiple(
+                sanitized, question: current, requiredCount: requiredIndices.count,
+                lower: minRequired, upper: maxAllowed, state: state, rng: rng
+            )
+            let selected = Array((requiredIndices + additional).prefix(maxAllowed))
+            state.recordChoice(questionNum: current, indices: Set(selected))
+            return finalize(selected)
+        }
 
         var selectionMask = [Int](repeating: 0, count: optionCount)
         var attempts = 0
@@ -377,19 +394,20 @@ public enum WjxAnswerBuilder {
     /// 对标 _build_wjx_matrix_action。
     static func buildMatrixAction(
         _ question: SurveyQuestionMeta, _ configIndex: Int,
-        config: ExecutionConfig,
+        state: inout ExecutionState,
         rng: RandomSource
     ) throws -> AnswerAction? {
+        let config = state.config
         let current = question.num
         let rowCount = max(1, question.rows)
         let optionCount = max(2, question.optionTexts.count != 0 ? question.optionTexts.count : question.options)
 
         var selectedIndices: [Int] = []
         var nextIndex = configIndex
-        for _ in 0..<rowCount {
+        for row in 0..<rowCount {
             let rowRaw = nextIndex < config.matrixProb.count ? config.matrixProb[nextIndex] : -1
             let rowProbabilities = AnswerProbabilities.normalizeDroplistProbs(rowRaw, optionCount: optionCount)
-            selectedIndices.append(rng.weightedIndex(rowProbabilities))
+            selectedIndices.append(AnswerSelection.choose(rowProbabilities, labels: question.optionTexts, question: current, row: row, state: state, rng: rng))
             nextIndex += 1
         }
         return AnswerAction(

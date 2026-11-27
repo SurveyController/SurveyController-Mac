@@ -12,6 +12,11 @@ public struct ExecutionConfig: @unchecked Sendable {
     public var surveyProvider: SurveyProvider = .wjx
     var answerDatetimeWindowMs: (Int, Int) = (0, 0)
     var reverseFill: ReverseFillRuntime?
+    var aiSettings: AISettings?
+    var selectionRuntime: AnswerSelectionRuntime?
+    var strictRatioQuestions: Set<Int> = []
+    var questionDimensions: [Int: String] = [:]
+    var targetAlpha = 0.85
     public var targetNum: Int = 1
     public var numThreads: Int = 1
     public var stopOnFailEnabled: Bool = true
@@ -37,6 +42,7 @@ public struct ExecutionConfig: @unchecked Sendable {
     public var textsProb: [[Double]] = []
     public var textEntryTypes: [String] = []
     public var textAiFlags: [Bool] = []
+    var multiTextAiFlags: [[Bool]] = []
     public var multiTextBlankModes: [[String]] = []
     public var multiTextBlankIntRanges: [[[Int]]] = []
     public var singleOptionFillTexts: [[Any?]?] = []
@@ -71,6 +77,7 @@ public enum ExecutionConfigBuilder {
         execution.randomUserAgentEnabled = config.randomUaEnabled
         execution.userAgentRatios = config.randomUaRatios
         execution.answerRules = config.answerRules
+        execution.targetAlpha = normalizeTargetAlpha(config.psychoTargetAlpha)
 
         // 题目元数据按（页, 题号）排序
         execution.questionsOrdered = config.questionsInfo
@@ -85,6 +92,20 @@ public enum ExecutionConfigBuilder {
         for entry in config.questionEntries {
             guard let questionNum = entry.questionNum, questionNum > 0 else { continue }
             let entryType = normalizedEntryType(entry)
+            if entry.distributionMode == "custom" {
+                let weights = (entry.probabilities as? [Any] ?? []).flatMap { ($0 as? [Any]) ?? [$0] }
+                if weights.contains(where: { JSONCoercion.asDouble($0) > 0 }) {
+                    execution.strictRatioQuestions.insert(questionNum)
+                }
+            }
+            if config.reliabilityModeEnabled {
+                let group = entry.dimension?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if !group.isEmpty && group != "未分组" {
+                    execution.questionDimensions[questionNum] = group
+                } else if ["scale", "score", "matrix"].contains(entryType) {
+                    execution.questionDimensions[questionNum] = globalReliabilityDimension
+                }
+            }
             let configIndex: Int
 
             switch entryType {
@@ -127,6 +148,7 @@ public enum ExecutionConfigBuilder {
                 execution.textsProb.append(asDoubleList(entry.probabilities))
                 execution.textEntryTypes.append(entryType)
                 execution.textAiFlags.append(entry.aiEnabled)
+                execution.multiTextAiFlags.append(entry.multiTextBlankAiFlags)
                 execution.multiTextBlankModes.append(entry.multiTextBlankModes)
                 execution.multiTextBlankIntRanges.append(entry.multiTextBlankIntRanges)
             case "location", "order":

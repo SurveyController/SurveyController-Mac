@@ -60,7 +60,7 @@ enum TencentProvider {
         if !sessionID.isEmpty { headers["X-Answer-Session"] = sessionID }
         let questions = try await fetch("questions", endpoint: endpoint, headers: headers, locale: "zhs", client: client)
         let raw = questions.objects("questions")
-        let records = try ProviderRegistry.answers(for: standardize(raw), context: &context)
+        let records = try await ProviderRegistry.answers(for: standardize(raw), context: &context, client: client)
         let byID = Dictionary(raw.map { ($0.text("id"), $0) }, uniquingKeysWith: { first, _ in first })
         var pages: [String: [ProviderJSON]] = [:]
         var pageOrder: [String] = []
@@ -97,7 +97,10 @@ enum TencentProvider {
         guard !payload.object("data").text("answer_hash").isEmpty else {
             throw SubmissionResultUnknownError(detail: "腾讯问卷提交结果缺少收录标识")
         }
-        if sessionID.isEmpty { return true }
+        if sessionID.isEmpty {
+            await config.selectionRuntime?.record(records.map(\.1))
+            return true
+        }
         let oldAnswer = session.object("answer_session")
         for attempt in 0..<3 {
             do {
@@ -105,7 +108,10 @@ enum TencentProvider {
                 let answer = current.object("answer_session")
                 let id = answer.int("last_answer_id")
                 if answer.int("last_submitted_at") > oldAnswer.int("last_submitted_at")
-                    || (id > 0 && id != oldAnswer.int("last_answer_id")) { return true }
+                    || (id > 0 && id != oldAnswer.int("last_answer_id")) {
+                    await config.selectionRuntime?.record(records.map(\.1))
+                    return true
+                }
             } catch {
                 throw SubmissionResultUnknownError(detail: "无法核对腾讯问卷收录状态")
             }

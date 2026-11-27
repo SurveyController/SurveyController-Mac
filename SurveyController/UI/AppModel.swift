@@ -43,6 +43,7 @@ public final class AppModel {
     // MARK: - 配置
 
     public var runtimeConfig = RuntimeConfig()
+    var aiSettings = AISettingsStore.load()
 
     // MARK: - 向导状态（对标官方 5.0 向导式流程）
 
@@ -329,7 +330,16 @@ public final class AppModel {
         if runtimeConfig.answerDuration.0 < 30 {
             report.warnings.append("作答时长过短（<30 秒）容易被判定为无效答卷")
         }
-        report.warnings.append("AI 填空尚未接入：填空题将使用固定/随机文本")
+        let aiRequired = entries.contains { entry in
+            entry.aiEnabled || entry.multiTextBlankAiFlags.contains(true)
+                || (entry.optionFillTexts ?? []).contains {
+                    if let choices = $0 as? [String] { return choices.contains(optionFillAiToken) }
+                    return JSONCoercion.asTrimmedString($0) == optionFillAiToken
+                }
+        }
+        if aiRequired && effectiveAI(for: runtimeConfig) == nil {
+            report.errors.append("请在设置中完成自定义 AI 配置，或调整使用 AI 的题目")
+        }
         return report
     }
 
@@ -361,6 +371,7 @@ public final class AppModel {
         goToStep(.run)
 
         var execution = ExecutionConfigBuilder.build(from: snapshot)
+        execution.aiSettings = effectiveAI(for: snapshot)
         if snapshot.reverseFillEnabled, let reverseFillSpec {
             execution.reverseFill = ReverseFillRuntime(reverseFillSpec)
             execution.numThreads = max(1, snapshot.reverseFillThreads)
@@ -659,6 +670,31 @@ public final class AppModel {
             guard generation == parseGeneration, loadGeneration == reverseFillGeneration else { return }
             showToast(error.localizedDescription)
         }
+    }
+
+    func saveAISettings() {
+        do {
+            try AISettingsStore.save(aiSettings)
+            showToast("AI 设置已保存")
+        } catch {
+            showToast(error.localizedDescription)
+        }
+    }
+
+    private func effectiveAI(for config: RuntimeConfig) -> AISettings? {
+        if config.aiConfigPresent {
+            let base = config.aiBaseUrl
+            let mayReuseLocalKey = base.isEmpty || base == aiSettings.baseURL
+            let imported = AISettings(
+                baseURL: base.isEmpty ? aiSettings.baseURL : base,
+                apiKey: config.aiApiKey.isEmpty && mayReuseLocalKey ? aiSettings.apiKey : config.aiApiKey,
+                model: config.aiModel.isEmpty && mayReuseLocalKey ? aiSettings.model : config.aiModel,
+                protocolName: config.aiApiProtocol,
+                systemPrompt: config.aiSystemPrompt
+            )
+            return imported.isConfigured ? imported : nil
+        }
+        return aiSettings.isConfigured ? aiSettings : nil
     }
 
     func reloadReverseFill() async {
